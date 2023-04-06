@@ -203,7 +203,7 @@ class NanoAmpliParser():
     def _mafft (self, src, des):
         mafft_bin = self._lib_path() + "/bin/mafft.bat"
         #./mafft.bat --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
-        cmd = f"{mafft_bin} --genafpair --maxiterate 1000 {src} > {des}"
+        cmd = f"{mafft_bin} {src} > {des}"
         self._exec(cmd,suppress_output=True)
     def orientation(self, src, des, tsv):
         try:
