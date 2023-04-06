@@ -14,19 +14,29 @@ import xmltodict
 import pandas as pd
 import json
 import os
+from collections import Counter
 
 # %%
 class NanoAmpliParser():
     def __init__(self, TEMP = './temp/'):
         self.TEMP = TEMP
-    def _exec(self, cmd):
-        out = run(cmd, stdout=PIPE, shell=True)
-        #print (">>", cmd)
-        #print("Output:")
-        #print(out.stdout.decode('utf-8'))
-        #print("Exception:")
-        #print(out.stderr)
-        return out.stdout.decode('utf-8'), out.stderr
+    def _lib_path(self):
+        #get the path of the library
+        return os.path.dirname(os.path.realpath(__file__))
+    def _exec(self, cmd,suppress_output=False):
+        if suppress_output:
+            with open(os.devnull, 'w') as DEVNULL:
+                out = run(cmd, stdout=DEVNULL, stderr=DEVNULL, shell=True)
+            return None
+        else:
+            out = run(cmd, stdout=PIPE, shell=True)
+            #print (">>", cmd)
+            #print("Output:")
+            #print(out.stdout.decode('utf-8'))
+            #print("Exception:")
+            #print(out.stderr)
+            return out.stdout.decode('utf-8'), out.stderr
+    
     def _exec_rt (self, cmd, prefix=""):
         p = Popen(cmd, stdout=PIPE, shell=True)
         for line in iter(p.stdout.readline, b''):
@@ -92,7 +102,6 @@ class NanoAmpliParser():
                 yield {"title": title, "seq": seq, "qual": qual}
     def _fastq_writer(self,title,seq,qual,handle):
         handle.write("@{}\n{}\n+\n{}\n".format(title,seq,qual))
-
     def _fasta_reader(self, handle):
         #Custom fasta reader
         line = handle.readline()
@@ -187,7 +196,35 @@ class NanoAmpliParser():
         seq = seqF +seq[100:-100] + seqR
         # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
         return ids, integrity, seq
+    def _mafft (self, src, des):
+        mafft_bin = self._lib_path() + "/bin/mafft.bat"
+        #./mafft.bat --adjustdirectionaccurately --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
+        cmd = f"{mafft_bin} --adjustdirectionaccurately --genafpair --maxiterate 1000 {src} > {des}"
+        self._exec(cmd,suppress_output=True)
+    def mafft_consensus (self, src, des):
+        try:
+            os.makedirs(des)
+        except:
+            pass
+        abs_des = os.path.abspath(des)
+        for f in os.scandir(src):
+            if f.is_file() and f.name.endswith(".fas"):
+                #Align sequences
+                self._mafft(f.path, f"{abs_des}/aln_{f.name}")
+                #naive consensus
+                with open(f"{abs_des}/aln_{f.name}") as handle:
+                    records = list(self._fasta_reader(handle))
+                    consensus = ""
+                    for i in range(len(records[0]['seq'])):
+                        col = [r['seq'][i] for r in records]
+                        #get_most_common
+                        com = Counter(col).most_common(1)[0][0]
+                        if com != "-":
+                            consensus += com
+                    with open(f"{abs_des}/con_{f.name}", "w") as out:
+                        out.write(f">{f.name}\n{consensus}")
 
+        return abs_des
     def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         """
         1.Process the raw sequencing file using a fastq_reader function which reads in four lines at a time representing one sequencing read.
