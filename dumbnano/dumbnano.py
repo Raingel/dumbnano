@@ -202,6 +202,10 @@ class NanoAmpliParser():
         cmd = f"{mafft_bin} --genafpair --maxiterate 1000 {src} > {des}"
         self._exec(cmd,suppress_output=True)
     def orientation(self, src, des, tsv):
+        try:
+            os.makedirs(des, exist_ok=True)
+        except:
+            pass
         bar_idx = pd.read_csv(tsv, sep='\t')
         #Read fasta file
         for f in os.scandir(src):
