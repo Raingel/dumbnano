@@ -198,9 +198,31 @@ class NanoAmpliParser():
         return ids, integrity, seq
     def _mafft (self, src, des):
         mafft_bin = self._lib_path() + "/bin/mafft.bat"
-        #./mafft.bat --adjustdirectionaccurately --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
-        cmd = f"{mafft_bin} --adjustdirectionaccurately --genafpair --maxiterate 1000 {src} > {des}"
+        #./mafft.bat --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
+        cmd = f"{mafft_bin} --genafpair --maxiterate 1000 {src} > {des}"
         self._exec(cmd,suppress_output=True)
+    def orientation(self, src, des, tsv):
+        bar_idx = pd.read_csv(tsv, sep='\t')
+        #Read fasta file
+        for f in os.scandir(src):
+            if f.is_file() and f.name.endswith(".fas"):
+                sample_id = f.name[:-4]
+                try:
+                    F = bar_idx[bar_idx['SampleID'].astype(str)==sample_id]['FwPrimer'].values[0]
+                    R = bar_idx[bar_idx['SampleID'].astype(str)==sample_id]['RvPrimer'].values[0]
+                except IndexError:
+                    print(f"Sample {sample_id} not found in the barcode file, skipping")
+                    continue
+                with open(f.path) as handle:
+                    with open(f"{des}/{f.name}", "w") as output:
+                        for record in self._fasta_reader(handle):
+                            #Check if the sequence is in the right orientation
+                            aln_f = edlib.align(F.upper(), record['seq'].upper()[:100], mode="HW", task="locations")
+                            aln_r = edlib.align(R.upper(), record['seq'].upper()[:100], mode="HW", task="locations")
+                            if aln_f['editDistance'] > aln_r['editDistance']:
+                                record['seq'] = self._reverse_complement(record['seq'])
+                            output.write(f">{record['title']}\n{record['seq']}\n")
+        return des
     def mafft_consensus (self, src, des):
         try:
             os.makedirs(des)
@@ -210,6 +232,7 @@ class NanoAmpliParser():
         for f in os.scandir(src):
             if f.is_file() and f.name.endswith(".fas"):
                 #Align sequences
+                print("Working on", f.name, "...")
                 self._mafft(f.path, f"{abs_des}/aln_{f.name}")
                 #naive consensus
                 with open(f"{abs_des}/aln_{f.name}") as handle:
