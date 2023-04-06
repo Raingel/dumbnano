@@ -299,27 +299,27 @@ class NanoAmpliParser():
         FAILED_NUM = len(pool['UNKNOWN']) + len(pool['MULTIPLE']) + len(pool['TRUNCATED'])
         print (f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
         return des
-    def combine_fastq(self, src, des):
+    def combine_fastq(self, src, des, name = "all.fastq"):
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             print(e)
             pass
-        with open(f'{des}/all.fastq', 'w') as outfile:
+        with open(f'{des}/{name}', 'w') as outfile:
             for f in os.scandir(src):
                 if f.name.endswith(".fastq.gz"):
                     print("Found fastq file: {}".format(f.name))
                     with gzip.open(f.path, 'rt') as infile:
                         for line in infile:
                             outfile.write(line)
-        return f'{des}/all.fastq'.format(self.TEMP)
-    def nanoflit(self, src, des, NANOFILT_QSCORE = 8,  NANOFILT_MIN_LEN = 400, NANOFILT_MAX_LEN = 8000):
+        return f'{des}/{name}'.format(self.TEMP)
+    def nanoflit(self, src, des, name = "all.fastq", NANOFILT_QSCORE = 8,  NANOFILT_MIN_LEN = 400, NANOFILT_MAX_LEN = 8000):
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             pass
         print("Start Nanoflit...")
-        des += "/all_nano.fastq"
+        des += f"/{name}"
         self._exec(f"NanoFilt -q {NANOFILT_QSCORE} --length {NANOFILT_MIN_LEN} --maxlength {NANOFILT_MAX_LEN} {src} > {des}")
         raw_fastq_lines = sum(1 for line in open(src)) /4
         filtered_fastq_line = sum(1 for line in open(des)) /4
