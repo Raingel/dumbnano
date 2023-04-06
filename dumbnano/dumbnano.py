@@ -140,11 +140,15 @@ class NanoAmpliParser():
         return edlib.align(str(s1).upper(), str(s2).upper())['editDistance']/(min(len(s1), len(s2))+0.1)*100
     def _reverse_complement(self, s):
         #Reverse complement a sequence
-        s = s.upper()
-        s = s.replace("A","t")
-        s = s.replace("T","a")
-        s = s.replace("C","g")
-        s = s.replace("G","c")
+        s = s.replace("A","T")
+        s = s.replace("T","A")
+        s = s.replace("C","G")
+        s = s.replace("G","C")
+        #for lower case
+        s = s.replace("a","t")
+        s = s.replace("t","a")
+        s = s.replace("c","g")
+        s = s.replace("g","c")
         return s[::-1]
     def _blast (self, seq):
         #Conduct a BLAST search using the NCBIWWW.qblast function
