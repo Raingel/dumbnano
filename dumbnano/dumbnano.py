@@ -498,7 +498,7 @@ class NanoAmpliParser():
                 except:
                     pass
     """
-    def blast(self, src, des, funguild = True, startswith="con_"):
+    def blast(self, src, des, name="blast.csv", funguild = True, startswith="con_"):
         pool = []
         for f in os.scandir(src):
             row = {}
@@ -549,8 +549,8 @@ class NanoAmpliParser():
                 pool.append(row)
         
         #pd.DataFrame(pool)[['name','cluster','reads', 'organism','taxa','seq', 'BLAST_simil','BLAST_acc','BLAST_seq', 'funguild', 'funguild_notes']].to_csv(f"{des}/blast.csv", index=False)
-        pd.DataFrame(pool).to_csv(f"{des}/blast.csv", index=False)
-        return f"{des}/blast.csv"
+        pd.DataFrame(pool).to_csv(f"{des}/{name}", index=False)
+        return f"{des}/{name}"
 
 
 
