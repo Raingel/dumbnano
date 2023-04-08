@@ -172,8 +172,13 @@ class NanoAmpliParser():
         print("You can check the status at https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" + rid + "")
         print("And results here: https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID=" + rid + "")
         # poll for results
+        retry = 30
         while True:
             time.sleep(30)
+            retry -= 1
+            if retry == 0:
+                print("Search", rid, "timed out")
+                return None
             url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=' + rid
             response = get(url)
             if 'Status=WAITING' in response.text:
@@ -577,8 +582,17 @@ class NanoAmpliParser():
         while i < len(query_seqs):
             print("Blasting", i, "to", i+batch, "of", len(query_seqs))
             query = "\n".join(query_seqs[i:i+batch])
-            blast_result = self.NCBIblast(query)
-            blast_result_pool.update(blast_result)
+            retry = 3
+            while True:
+                try:
+                    blast_result = self.NCBIblast(query)
+                    if blast_result != None:
+                        blast_result_pool.update(blast_result)
+                        break
+                    else:
+                        retry -= 1
+                except:
+                    retry -= 1
             i+=batch
         for sample in blast_result_pool.keys():
             pool_df.loc[sample, 'acc'] = blast_result_pool[sample]['acc']
