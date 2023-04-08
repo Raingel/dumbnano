@@ -1,5 +1,4 @@
 hdbscan
-ont-bonito
 edlib
 NanoFilt
 matplotlib
