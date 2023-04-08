@@ -3,5 +3,4 @@ ont-bonito
 edlib
 NanoFilt
 matplotlib
-requestst
 xmltodict
