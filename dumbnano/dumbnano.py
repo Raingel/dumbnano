@@ -153,10 +153,12 @@ class NanoAmpliParser():
         return s[::-1]
     def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n" ):
         program = "blastn&MEGABLAST=on"
-        database = "nr"
+        database = "nt"
         encoded_queries = urllib.parse.quote(seqs)
+        WORD_SIZE = 64
+        EXPECT = 0.0001
         # build the request
-        args = "CMD=Put&PROGRAM=" + program + "&DATABASE=" + database + "&QUERY=" + encoded_queries
+        args = "CMD=Put&PROGRAM=" + program + "&DATABASE=" + database + "&QUERY=" + encoded_queries + "&WORD_SIZE=" + str(WORD_SIZE) + "&EXPECT=" + str(EXPECT)
         url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi'
         response = post(url, data=args)
         print("BLASTING {} sequences".format(len(seqs.split(">"))-1))
