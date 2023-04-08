@@ -8,13 +8,14 @@ from matplotlib import pyplot as plt
 from sklearn.manifold import MDS
 import re
 import shutil
-from Bio.Blast import NCBIWWW, NCBIXML
-from requests import get
+from requests import get, post
 import xmltodict
 import pandas as pd
 import json
 import os
 from collections import Counter
+import urllib.parse
+import time
 
 # %%
 class NanoAmpliParser():
@@ -150,25 +151,72 @@ class NanoAmpliParser():
         s = s.replace("c","g")
         s = s.replace("g","c")
         return s[::-1]
-    def _blast (self, seq):
-        #Conduct a BLAST search using the NCBIWWW.qblast function
-        result_handle = NCBIWWW.qblast("blastn", "nt", seq, megablast = True)
-        #Extract info from result
-        blast_record = NCBIXML.read(result_handle)
-        #Get first accession 
-        acc = blast_record.alignments[0].accession
-        #Get smiliarity
-        sim = blast_record.alignments[0].hsps[0].identities/blast_record.alignments[0].hsps[0].align_length
-        #Get aligned sequence
-        seq = blast_record.alignments[0].hsps[0].sbjct
-        #Get accession info
-        r = get('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=gb&retmode=xml&id={}'.format(acc))
-        #xml to json
-        r = xmltodict.parse(r.text)
-
-        org = r['GBSet']['GBSeq']['GBSeq_organism']
-        taxa = r['GBSet']['GBSeq']['GBSeq_taxonomy']
-        return {'acc':acc, 'org':org, 'taxa':taxa, 'sim':sim, 'seq':seq}
+    def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n" ):
+        program = "blastn&MEGABLAST=on"
+        database = "nr"
+        encoded_queries = urllib.parse.quote(seqs)
+        # build the request
+        args = "CMD=Put&PROGRAM=" + program + "&DATABASE=" + database + "&QUERY=" + encoded_queries
+        url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi'
+        response = post(url, data=args)
+        print("BLASTING {} sequences".format(len(seqs.split(">"))-1))
+        # parse out the request id
+        rid = ""
+        for line in response.text.split('\n'):
+            if line.startswith('    RID = '):
+                rid = line.split()[2]
+        #Search submitted
+        print("Query", rid, "submitted.")
+        print("You can check the status at https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" + rid + "")
+        print("And results here: https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID=" + rid + "")
+        # poll for results
+        while True:
+            time.sleep(10)
+            url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=' + rid
+            response = get(url)
+            if 'Status=WAITING' in response.text:
+                print("Searching...")
+                continue
+            if 'Status=FAILED' in response.text:
+                print("Search", rid, "failed; please report to blast-help@ncbi.nlm.nih.gov.")
+            if 'Status=UNKNOWN' in response.text:
+                print("Search", rid, "expired.")
+            if 'Status=READY' in response.text:
+                if 'ThereAreHits=yes' in response.text:
+                    print("Search complete, retrieving results...")
+                    break
+                else:
+                    print("No hits found.")
+        # retrieve and display results
+        url = f'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID={rid}&FORMAT_TYPE=XML'
+        response = get(url)
+        #Convert the XML to a dictionary
+        blast_dict = xmltodict.parse(response.text)
+        #Get the first hit of each query
+        pool = {}
+        for rec in blast_dict['BlastOutput']['BlastOutput_iterations']['Iteration']:
+            seq_name = rec['Iteration_query-def']
+            try:
+                hit = rec['Iteration_hits']['Hit'][0]
+            except:
+                hit = None
+            if hit:
+                acc = hit['Hit_accession']
+                if type(hit['Hit_hsps']['Hsp']) == list:
+                    hit_hsp = hit['Hit_hsps']['Hsp'][0]
+                else:
+                    hit_hsp = hit['Hit_hsps']['Hsp']
+                hit_seq = hit_hsp['Hsp_hseq'].replace('-', '')
+                hit_def = hit['Hit_def']
+                similarity = hit_hsp['Hsp_identity']
+                #Get taxon info
+                r = get('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=gb&retmode=xml&id={}'.format(acc))
+                #xml to json
+                r = xmltodict.parse(r.text)
+                org = r['GBSet']['GBSeq']['GBSeq_organism']
+                taxa = r['GBSet']['GBSeq']['GBSeq_taxonomy']
+                pool[seq_name] = {'acc': acc, 'hit_seq': hit_seq, 'hit_def': hit_def, 'org': org, 'taxa': taxa}
+        return pool
     def _get_sample_id (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
         ids = []
@@ -370,7 +418,6 @@ class NanoAmpliParser():
         out, err = self._exec(f"minibar.py -F -C -e {MINIBAR_INDEX_DIS} {BARCODE_INDEX_FILE} {src} 2>&1")
         os.chdir(cwd)
         return des
-
     def batch_to_fasta(self, src, des):
         #Convert all fastq files in a folder to fasta
         print("Start converting fastq to fasta...")
@@ -455,13 +502,12 @@ class NanoAmpliParser():
                     plt.savefig(f"{des}/{f.name[:-4]}_MDS.jpg", dpi=56)
                     #Do not show the plot
                     plt.close()
-    def assemble (self, src, des, mat = "/content/lamassemble/train/promethion.mat"):
+    def lamassemble (self, src, des, mat = "/content/lamassemble/train/promethion.mat"):
         for f in os.scandir(src):
             if f.name.endswith(".fas"):
                 self._exec(f'lamassemble /content/lamassemble/train/promethion.mat -a {f.path} > {des}/aln_{f.name}')
                 self._exec(f'lamassemble /content/lamassemble/train/promethion.mat -c -n {f.name[:-4]} {des}/aln_{f.name} > {des}/con_{f.name}')
-        return des
-                
+        return des              
     def deHead (self, src, des, start_offset = 0 , end_offset = 0):
         for f in os.scandir(src):
             if f.name.endswith(".fas"):   
@@ -498,6 +544,64 @@ class NanoAmpliParser():
                 except:
                     pass
     """
+    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_"):
+        #Collect all sequences
+        pool_df = pd.DataFrame() 
+        query_seqs=[] 
+        for f in os.scandir(src):
+            if f.name.startswith(startswith) and f.name.endswith(".fas"):
+                with open(f.path, 'r') as handle:
+                    seqs = list(self._fasta_reader(handle))
+                    for s in seqs:
+                        pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
+                        query_seqs.append(f">{s['title']}\n{s['seq']}")       
+        #set title as index
+        pool_df.set_index('title', inplace=True)
+        for index, row in pool_df.iterrows():
+            pool_df.loc[index, 'length'] = str(len(row['seq']))
+            try:
+                #2110_cluster_-1_r2154.fas	
+                #{sample}_cluster_{cluster_no}_r{reads_count}.fas
+                sample, cluster_no, reads_count = re.search("(.*)_cluster_([-0-9]+)_r(\d+).fas", row['title']).groups()
+                pool_df.loc[index, 'sample'] = sample
+                pool_df.loc[index, 'cluster_no'] = cluster_no
+                pool_df.loc[index, 'reads_count'] = reads_count
+            except:
+                pass    
+        #Blast all sequences
+        i = 0
+        batch = 10
+        blast_result_pool = {}
+        while i < len(query_seqs):
+            print("Blasting", i, "to", i+batch, "of", len(query_seqs))
+            query = "\n".join(query_seqs[i:i+batch])
+            blast_result = self.NCBIblast(query)
+            blast_result_pool.update(blast_result)
+            i+=batch
+        for sample in blast_result_pool.keys():
+            pool_df.loc[sample, 'acc'] = blast_result_pool[sample]['acc']
+            pool_df.loc[sample, 'hit_seq'] = blast_result_pool[sample]['hit_seq']
+            pool_df.loc[sample, 'hit_def'] = blast_result_pool[sample]['hit_def']
+            pool_df.loc[sample, 'org'] = blast_result_pool[sample]['org']
+            pool_df.loc[sample, 'taxa'] = blast_result_pool[sample]['taxa']
+            #Check funguild
+            if funguild and blast_result_pool[sample]['org'] != "":
+                funguild_des = []
+                try:
+                    funguild_des = json.loads(get(f"https://www.mycoportal.org/funguild/services/api/db_return.php?qDB=funguild_db&qField=taxon&qText={blast_result_pool[sample]['org']}").text)
+                except:
+                    pass
+                if funguild_des != []:
+                    #print(funguild_des)
+                    try:
+                        pool_df.loc[sample,'funguild'] = funguild_des[0]['guild']
+                    except:
+                        pass
+                    try:
+                        pool_df.loc[sample,'funguild_notes'] = funguild_des[0]['notes']
+                    except:
+                        pass
+        return pool_df
     def blast(self, src, des, name="blast.csv", funguild = True, startswith="con_"):
         pool = []
         for f in os.scandir(src):
