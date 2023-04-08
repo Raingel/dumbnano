@@ -155,8 +155,8 @@ class NanoAmpliParser():
         program = "blastn&MEGABLAST=on"
         database = "nt"
         encoded_queries = urllib.parse.quote(seqs)
-        WORD_SIZE = 64
-        EXPECT = 0.0001
+        WORD_SIZE = 32
+        EXPECT = 0.001
         # build the request
         args = "CMD=Put&PROGRAM=" + program + "&DATABASE=" + database + "&QUERY=" + encoded_queries + "&WORD_SIZE=" + str(WORD_SIZE) + "&EXPECT=" + str(EXPECT)
         url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi'
@@ -173,7 +173,7 @@ class NanoAmpliParser():
         print("And results here: https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID=" + rid + "")
         # poll for results
         while True:
-            time.sleep(10)
+            time.sleep(30)
             url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=' + rid
             response = get(url)
             if 'Status=WAITING' in response.text:
@@ -572,7 +572,7 @@ class NanoAmpliParser():
                 pass    
         #Blast all sequences
         i = 0
-        batch = 10
+        batch = 5
         blast_result_pool = {}
         while i < len(query_seqs):
             print("Blasting", i, "to", i+batch, "of", len(query_seqs))
