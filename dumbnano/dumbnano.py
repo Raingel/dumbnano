@@ -182,7 +182,7 @@ class NanoAmpliParser():
         # poll for results
         retry = 30
         while True:
-            time.sleep(5)
+            time.sleep(30)
             retry -= 1
             if retry == 0:
                 print("Search", rid, "timed out")
