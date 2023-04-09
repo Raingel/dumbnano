@@ -161,7 +161,7 @@ class NanoAmpliParser():
         args = "CMD=Put&PROGRAM=" + program + "&DATABASE=" + database + "&QUERY=" + encoded_queries + "&WORD_SIZE=" + str(WORD_SIZE) + "&EXPECT=" + str(EXPECT)
         url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi'
         response = post(url, data=args)
-        print("BLASTING {} sequences".format(len(seqs.split(">"))-1))
+        #print("BLASTING {} sequences".format(len(seqs.split(">"))-1))
         # parse out the request id
         rid = ""
         for line in response.text.split('\n'):
@@ -551,7 +551,7 @@ class NanoAmpliParser():
                 except:
                     pass
     """
-    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_"):
+    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", max_query_length=500, batch = 5):
         #Collect all sequences
         pool_df = pd.DataFrame() 
         query_seqs=[] 
@@ -561,6 +561,9 @@ class NanoAmpliParser():
                     seqs = list(self._fasta_reader(handle))
                     for s in seqs:
                         pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
+                        if len(s['seq']) <= max_query_length:
+                            #If sequence is too long, preserve only max_query_length in middle
+                            s['seq'] = s['seq'][:int(max_query_length//2)] + s['seq'][-int(max_query_length//2):]
                         query_seqs.append(f">{s['title']}\n{s['seq']}")       
         #set title as index
         pool_df.set_index('title', inplace=True)
@@ -577,7 +580,6 @@ class NanoAmpliParser():
                 pass    
         #Blast all sequences
         i = 0
-        batch = 5
         blast_result_pool = {}
         while i < len(query_seqs):
             print("Blasting", i, "to", i+batch, "of", len(query_seqs))
