@@ -174,7 +174,7 @@ class NanoAmpliParser():
         # poll for results
         retry = 30
         while True:
-            time.sleep(30)
+            time.sleep(5)
             retry -= 1
             if retry == 0:
                 print("Search", rid, "timed out")
@@ -201,9 +201,19 @@ class NanoAmpliParser():
         blast_dict = xmltodict.parse(response.text)
         #Get the first hit of each query
         pool = {}
+
+        #If there is only one query, the xml format is different
+        #blast_dict['BlastOutput']['BlastOutput_iterations']['Iteration'] will be a dict instead of a list
+        #So we need to convert it to a list
+        if type(blast_dict['BlastOutput']['BlastOutput_iterations']['Iteration']) == dict:
+            blast_dict['BlastOutput']['BlastOutput_iterations']['Iteration'] = [blast_dict['BlastOutput']['BlastOutput_iterations']['Iteration']]
+
         for rec in blast_dict['BlastOutput']['BlastOutput_iterations']['Iteration']:
-            seq_name = rec['Iteration_query-def']
             try:
+                seq_name = rec['Iteration_query-def']
+            except Exception as e:
+                print(e)
+            try: 
                 hit = rec['Iteration_hits']['Hit'][0]
             except:
                 hit = None
@@ -573,11 +583,12 @@ class NanoAmpliParser():
             try:
                 #2110_cluster_-1_r2154.fas	
                 #{sample}_cluster_{cluster_no}_r{reads_count}.fas
-                sample, cluster_no, reads_count = re.search("(.*)_cluster_([-0-9]+)_r(\d+).fas", row['title']).groups()
+                sample, cluster_no, reads_count = re.search("(.*)_cluster_([-0-9]+)_r(\d+).fas", index).groups()
                 pool_df.loc[index, 'sample'] = sample
                 pool_df.loc[index, 'cluster_no'] = cluster_no
                 pool_df.loc[index, 'reads_count'] = reads_count
-            except:
+            except Exception as e:
+                print(e)
                 pass    
         #Blast all sequences
         i = 0
@@ -586,7 +597,7 @@ class NanoAmpliParser():
             print("Blasting", i, "to", i+batch, "of", len(query_seqs))
             query = "\n".join(query_seqs[i:i+batch])
             retry = 3
-            while True:
+            while retry >= 0:
                 try:
                     blast_result = self.NCBIblast(query)
                     if blast_result != None:
@@ -594,7 +605,8 @@ class NanoAmpliParser():
                         break
                     else:
                         retry -= 1
-                except:
+                except Exception as e:
+                    print(e)
                     retry -= 1
             i+=batch
         for sample in blast_result_pool.keys():
@@ -620,6 +632,7 @@ class NanoAmpliParser():
                         pool_df.loc[sample,'funguild_notes'] = funguild_des[0]['notes']
                     except:
                         pass
+        pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
         return pool_df
     def blast(self, src, des, name="blast.csv", funguild = True, startswith="con_"):
         pool = []
