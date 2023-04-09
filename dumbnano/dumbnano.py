@@ -561,7 +561,7 @@ class NanoAmpliParser():
                     seqs = list(self._fasta_reader(handle))
                     for s in seqs:
                         pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
-                        if len(s['seq']) <= max_query_length:
+                        if len(s['seq']) >= max_query_length:
                             #If sequence is too long, preserve only max_query_length in middle
                             s['seq'] = s['seq'][:int(max_query_length//2)] + s['seq'][-int(max_query_length//2):]
                         query_seqs.append(f">{s['title']}\n{s['seq']}")       
