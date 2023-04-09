@@ -140,17 +140,25 @@ class NanoAmpliParser():
         #This is a wrapper for edlib.align
         return edlib.align(str(s1).upper(), str(s2).upper())['editDistance']/(min(len(s1), len(s2))+0.1)*100
     def _reverse_complement(self, s):
-        #Reverse complement a sequence
-        s = s.replace("A","T")
-        s = s.replace("T","A")
-        s = s.replace("C","G")
-        s = s.replace("G","C")
-        #for lower case
-        s = s.replace("a","t")
-        s = s.replace("t","a")
-        s = s.replace("c","g")
-        s = s.replace("g","c")
-        return s[::-1]
+        s = list(s)
+        for pos, nuc in enumerate(s):
+            if nuc == 'A':
+                s[pos] = 'T'
+            elif nuc == 'T':
+                s[pos] = 'A'
+            elif nuc == 'C':
+                s[pos] = 'G'
+            elif nuc == 'G':
+                s[pos] = 'C'
+            elif nuc == 'a':
+                s[pos] = 't'
+            elif nuc == 't':
+                s[pos] = 'a'
+            elif nuc == 'c':
+                s[pos] = 'g'
+            elif nuc == 'g':
+                s[pos] = 'c'
+        return ''.join(s[::-1])
     def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n" ):
         program = "blastn&MEGABLAST=on"
         database = "nt"
@@ -633,7 +641,7 @@ class NanoAmpliParser():
                     except:
                         pass
         pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
-        return pool_df
+        return "{des}/{name}"
     def blast(self, src, des, name="blast.csv", funguild = True, startswith="con_"):
         pool = []
         for f in os.scandir(src):
