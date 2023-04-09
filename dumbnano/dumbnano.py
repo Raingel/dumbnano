@@ -233,7 +233,7 @@ class NanoAmpliParser():
                     hit_hsp = hit['Hit_hsps']['Hsp']
                 hit_seq = hit_hsp['Hsp_hseq'].replace('-', '')
                 hit_def = hit['Hit_def']
-                similarity = round(hit_hsp['Hsp_identity']/int(hit_hsp['Hsp_align-len']),2)
+                similarity = round(int(hit_hsp['Hsp_identity'])/int(hit_hsp['Hsp_align-len']),2)
                 #Get taxon info
                 r = get('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=gb&retmode=xml&id={}'.format(acc))
                 #xml to json
