@@ -563,7 +563,8 @@ class NanoAmpliParser():
                         pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
                         if len(s['seq']) >= max_query_length:
                             #If sequence is too long, preserve only max_query_length in middle
-                            s['seq'] = s['seq'][:int(max_query_length//2)] + s['seq'][-int(max_query_length//2):]
+                            diff = len(s['seq']) - max_query_length
+                            s['seq'] = s['seq'][int(diff/2):int(diff/2)+max_query_length]
                         query_seqs.append(f">{s['title']}\n{s['seq']}")       
         #set title as index
         pool_df.set_index('title', inplace=True)
