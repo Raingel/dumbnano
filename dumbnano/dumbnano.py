@@ -233,14 +233,14 @@ class NanoAmpliParser():
                     hit_hsp = hit['Hit_hsps']['Hsp']
                 hit_seq = hit_hsp['Hsp_hseq'].replace('-', '')
                 hit_def = hit['Hit_def']
-                similarity = hit_hsp['Hsp_identity']
+                similarity = round(hit_hsp['Hsp_identity']/int(hit_hsp['Hsp_align-len']),2)
                 #Get taxon info
                 r = get('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=gb&retmode=xml&id={}'.format(acc))
                 #xml to json
                 r = xmltodict.parse(r.text)
                 org = r['GBSet']['GBSeq']['GBSeq_organism']
                 taxa = r['GBSet']['GBSeq']['GBSeq_taxonomy']
-                pool[seq_name] = {'acc': acc, 'hit_seq': hit_seq, 'hit_def': hit_def, 'org': org, 'taxa': taxa}
+                pool[seq_name] = {'acc': acc, 'hit_seq': hit_seq, 'hit_def': hit_def, 'org': org, 'taxa': taxa, 'similarity': similarity}
         return pool
     def _get_sample_id (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
@@ -618,11 +618,13 @@ class NanoAmpliParser():
                     retry -= 1
             i+=batch
         for sample in blast_result_pool.keys():
-            pool_df.loc[sample, 'acc'] = blast_result_pool[sample]['acc']
-            pool_df.loc[sample, 'hit_seq'] = blast_result_pool[sample]['hit_seq']
-            pool_df.loc[sample, 'hit_def'] = blast_result_pool[sample]['hit_def']
             pool_df.loc[sample, 'org'] = blast_result_pool[sample]['org']
+            pool_df.loc[sample, 'similarity'] = blast_result_pool[sample]['similarity']
             pool_df.loc[sample, 'taxa'] = blast_result_pool[sample]['taxa']
+            pool_df.loc[sample, 'acc'] = blast_result_pool[sample]['acc']
+            pool_df.loc[sample, 'hit_def'] = blast_result_pool[sample]['hit_def']
+            pool_df.loc[sample, 'hit_seq'] = blast_result_pool[sample]['hit_seq']
+
             #Check funguild
             if funguild and blast_result_pool[sample]['org'] != "":
                 funguild_des = []
@@ -641,7 +643,7 @@ class NanoAmpliParser():
                     except:
                         pass
         pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
-        return "{des}/{name}"
+        return f"{des}/{name}"
     def blast(self, src, des, name="blast.csv", funguild = True, startswith="con_"):
         pool = []
         for f in os.scandir(src):
