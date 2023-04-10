@@ -451,23 +451,22 @@ class NanoAmpliParser():
         des += f"/{name}"
         total = 0
         passed = 0
-        with open(des, 'w') as outfile:
-            for f in os.scandir(src):
-                if f.name.endswith(".fastq"):
-                    print("Found fastq file: {}".format(f.name))
-                    with open(f.path, 'r') as infile:
-                        for line in infile:
-                            title = line
-                            seq = next(infile)
-                            plus = next(infile)
-                            qual = next(infile)
-                            total +=1
-                            if self._average_quality(qual) >= QSCORE and len(seq) >= MIN_LEN and len(seq) <= MAX_LEN:
-                                outfile.write(title)
-                                outfile.write(seq)
-                                outfile.write(plus)
-                                outfile.write(qual)
-                                passed += 1
+        with open(src, 'r') as infile:
+            with open(des, 'w') as outfile:
+                while True:
+                    title = infile.readline().strip()
+                    if not title:
+                        break
+                    seq = infile.readline().strip()
+                    plus = infile.readline().strip()
+                    qual = infile.readline().strip()
+                    total += 1
+                    if self._average_quality(qual) >= QSCORE and len(seq) >= MIN_LEN and len(seq) <= MAX_LEN:
+                        outfile.write(title + "\n")
+                        outfile.write(seq + "\n")
+                        outfile.write(plus + "\n")
+                        outfile.write(qual + "\n")
+                        passed += 1
         print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter")
         return des
     def minibar(self, src, des, BARCODE_INDEX_FILE, MINIBAR_INDEX_DIS):
