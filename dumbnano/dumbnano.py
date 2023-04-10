@@ -429,6 +429,47 @@ class NanoAmpliParser():
         filtered_fastq_line = sum(1 for line in open(des)) /4
         print("Raw reads: {}, Passed: {}({}%)".format(raw_fastq_lines, filtered_fastq_line, int(filtered_fastq_line/raw_fastq_lines*100)))
         return des
+    def _average_quality(quality_string):
+        """
+        Calculate the average quality score of a given quality string.
+
+        Args:
+            quality_string (str): quality string in FASTQ format.
+
+        Returns:
+            average_quality (float): the average quality score.
+        """
+        quality_scores = [ord(char) - 33 for char in quality_string]
+        average_quality = sum(quality_scores) / len(quality_scores)
+        return average_quality
+    def qualityfilt(self, src, des, name="all.fastq", QSCORE = 8, MIN_LEN = 400, MAX_LEN = 8000):
+        try:
+            os.makedirs(des, exist_ok=True)
+        except Exception as e:
+            pass
+        print("Start Qualityfilt...")
+        des += f"/{name}"
+        total = 0
+        passed = 0
+        with open(des, 'w') as outfile:
+            for f in os.scandir(src):
+                if f.name.endswith(".fastq"):
+                    print("Found fastq file: {}".format(f.name))
+                    with open(f.path, 'r') as infile:
+                        for line in infile:
+                            title = line
+                            seq = next(infile)
+                            plus = next(infile)
+                            qual = next(infile)
+                            total +=1
+                            if self._average_quality(qual) >= QSCORE and len(seq) >= MIN_LEN and len(seq) <= MAX_LEN:
+                                outfile.write(title)
+                                outfile.write(seq)
+                                outfile.write(plus)
+                                outfile.write(qual)
+                                passed += 1
+        print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter")
+        return des
     def minibar(self, src, des, BARCODE_INDEX_FILE, MINIBAR_INDEX_DIS):
         src = src
         #Check if the barcode index file is valid
