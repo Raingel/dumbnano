@@ -429,7 +429,7 @@ class NanoAmpliParser():
         filtered_fastq_line = sum(1 for line in open(des)) /4
         print("Raw reads: {}, Passed: {}({}%)".format(raw_fastq_lines, filtered_fastq_line, int(filtered_fastq_line/raw_fastq_lines*100)))
         return des
-    def _average_quality(quality_string):
+    def _average_quality(self, quality_string):
         """
         Calculate the average quality score of a given quality string.
 
