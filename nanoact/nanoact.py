@@ -18,7 +18,7 @@ import urllib.parse
 import time
 
 # %%
-class NanoAmpliParser():
+class NanoAct():
     def __init__(self, TEMP = './temp/'):
         self.TEMP = TEMP
     def _lib_path(self):
