@@ -340,9 +340,9 @@ class NanoAct():
         7.Finally, output the demultiplexed reads into different output files based on their barcode.
         """
         # Define the main function for demultiplexing
-        if BARCODE_INDEX_FILE.endswith(".tsv"):
+        if BARCODE_INDEX_FILE.endswith("tsv"):
             sep = "\t"
-        elif BARCODE_INDEX_FILE.endswith(".csv"):
+        elif BARCODE_INDEX_FILE.endswith("csv"):
             sep = ","
         BARCODE_IDX_DF = pd.read_csv(BARCODE_INDEX_FILE, sep=sep)
         # Read in the barcode index file as a pandas DataFrame
