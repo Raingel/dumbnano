@@ -329,7 +329,7 @@ class NanoAct():
                         out.write(f">{f.name}\n{consensus}")
 
         return abs_des
-    def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
+    def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3):
         """
         1.Process the raw sequencing file using a fastq_reader function which reads in four lines at a time representing one sequencing read.
         2.For each read, call the _get_sample_id function to identify its corresponding sample ID and barcode integrity.
@@ -346,18 +346,20 @@ class NanoAct():
             sep = ","
         BARCODE_IDX_DF = pd.read_csv(BARCODE_INDEX_FILE, sep=sep)
         # Read in the barcode index file as a pandas DataFrame
-        if not all([x in BARCODE_IDX_DF.columns for x in ["SampleID", "FwIndex", "RvAnchor"]]):
+        if not all([x in BARCODE_IDX_DF.columns for x in ["SampleID", "FwIndex", "RvAnchor", "ExpectedLength"]]):
             raise ValueError("BARCODE_INDEX_FILE must have SampleID, FwIndex, RvAnchor columns")
+        print ("BARCODE_INDEX_FILE loaded")
         # Check whether the barcode index file has the required columns
         barcode_hash_table = {}
         for index, row in BARCODE_IDX_DF.iterrows():
-            barcode_hash_table[row["SampleID"]] = {"FwIndex": row["FwIndex"], "RvAnchor": row["RvAnchor"]}
+            barcode_hash_table[row["SampleID"]] = {"FwIndex": row["FwIndex"], "RvAnchor": row["RvAnchor"], "ExpectedLength": row["ExpectedLength"]}
         # Store the barcode index file as a hash table of barcode-sample ID pairs
         pool = {}
         counter = 1
         pool["UNKNOWN"] = []
         pool["MULTIPLE"] = []
         pool["TRUNCATED"] = []
+        pool["IncorrectLength"] = []
         for id in barcode_hash_table:
             pool[id] = []
         # Initialize dictionaries for output files for each sample and additional dictionaries for reads with unknown, multiple, or truncated barcodes
@@ -369,7 +371,11 @@ class NanoAct():
                     if integrity[0] == False:
                         pool["TRUNCATED"].append(record)
                     else:
-                        pool[ids[0]].append(record)
+                        #Check if seq in ExpectedLength
+                        if (len(seq) - barcode_hash_table[ids[0]]["ExpectedLength"])**2 < (barcode_hash_table[ids[0]]["ExpectedLength"] * expected_length_variation)**2:
+                            pool[ids[0]].append(record)
+                        else:
+                            pool["IncorrectLength"].append(record)
                 elif len(ids) > 1:
                     pool["MULTIPLE"].append(record)
                 else:
@@ -386,7 +392,7 @@ class NanoAct():
         stat_df = pd.DataFrame(columns=["SampleID", "Count"])
         for bin in pool:
             stat_df = pd.concat([stat_df, pd.DataFrame({"SampleID": [bin], "Count": [len(pool[bin])]})])
-            if bin in ['MULTIPLE', 'UNKNOWN', 'TRUNCATED']:
+            if bin in ['MULTIPLE', 'UNKNOWN', 'TRUNCATED','IncorrectLength']:
                 path = f"{des}/trash/{bin}"
             else:
                 path = f"{des}/{bin}"
