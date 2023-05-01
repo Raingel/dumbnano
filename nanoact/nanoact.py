@@ -24,20 +24,26 @@ class NanoAct():
     def _lib_path(self):
         #get the path of the library
         return os.path.dirname(os.path.realpath(__file__))
-    def _exec(self, cmd,suppress_output=False):
+    def _exec(self, cmd,suppress_output=True):
         if suppress_output:
             with open(os.devnull, 'w') as DEVNULL:
                 out = run(cmd, stdout=DEVNULL, stderr=DEVNULL, shell=True)
             return None
         else:
             out = run(cmd, stdout=PIPE, shell=True)
-            #print (">>", cmd)
-            #print("Output:")
-            #print(out.stdout.decode('utf-8'))
-            #print("Exception:")
-            #print(out.stderr)
+            print (">>", cmd)
+            print("Output:")
+            print(out.stdout.decode('utf-8'))
+            print("Exception:")
+            print(out.stderr)
             return out.stdout.decode('utf-8'), out.stderr
-    
+    def _clean_temp(self):
+        #Clean the temp folder
+        try:
+            shutil.rmtree(self.TEMP)
+            os.mkdir(self.TEMP)
+        except FileNotFoundError:
+            os.mkdir(self.TEMP)
     def _exec_rt (self, cmd, prefix=""):
         p = Popen(cmd, stdout=PIPE, shell=True)
         for line in iter(p.stdout.readline, b''):
@@ -747,7 +753,53 @@ class NanoAct():
         #pd.DataFrame(pool)[['name','cluster','reads', 'organism','taxa','seq', 'BLAST_simil','BLAST_acc','BLAST_seq', 'funguild', 'funguild_notes']].to_csv(f"{des}/blast.csv", index=False)
         pd.DataFrame(pool).to_csv(f"{des}/{name}", index=False)
         return f"{des}/{name}"
-
-
-
-
+    def mmseqs_cluster(self, src, des, mmseqs="/nanoact/bin/mmseqs", min_seq_id=0.5, cov_mode=1, k=7, threads=8, s=7.5, cluster_mode=2, min_read_num = 0):
+        #Get current library file  path
+        lib = os.path.dirname(os.path.realpath(__file__))
+        mmseqs = f"{lib}/bin/mmseqs"
+        try:
+            os.makedirs(des)
+        except:
+            pass
+        abs_des = os.path.abspath(des)
+        for f in os.scandir(src):
+            if f.is_file() and f.name.endswith(".fas"):
+                print("Clustering", f.name)
+                sample = f.name.split(".fas")[0]
+                #clean up temp folder
+                self._clean_temp()
+                #build db
+                print("Creating db")
+                self._exec(f"{mmseqs} createdb {f.path} {self.TEMP}/db")
+                #cluster
+                print("Clustering")
+                self._exec(f"{mmseqs} cluster {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/tmp --min-seq-id {min_seq_id} --cov-mode {cov_mode} -k {k} --threads {threads} -s {s} --cluster-mode {cluster_mode}")
+                #export tsv
+                #self._exec(f"{mmseqs} createtsv {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.tsv")
+                #export fasta
+                print("Parsing result")
+                self._exec(f"{mmseqs} createseqfiledb {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.seq")
+                self._exec(f"{mmseqs} result2flat {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster.seq {self.TEMP}/cluster.fas")
+                try:
+                    with open(f"{self.TEMP}/cluster.fas", 'r') as handle:
+                        bin = {}
+                        cluster_no = -1
+                        for rec in self._fasta_reader(handle):
+                            if rec['seq'] == "":
+                                cluster_no +=1
+                                bin[cluster_no] = []
+                                continue
+                            else:
+                                bin[cluster_no].append(rec)
+                except Exception as e:
+                    print("Error reading output file", e)
+                    continue
+                #save each cluster to file
+                for cluster_no in bin:
+                    if len(bin[cluster_no]) < min_read_num:
+                        continue
+                    with open(f"{abs_des}/{sample}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
+                        for rec in bin[cluster_no]:
+                            handle.write(f">{rec['title']}\n{rec['seq']}\n")
+        return des
+                
