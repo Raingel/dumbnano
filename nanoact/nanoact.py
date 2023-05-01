@@ -769,15 +769,15 @@ class NanoAct():
                 #clean up temp folder
                 self._clean_temp()
                 #build db
-                print("Creating db")
+                #print("Creating db")
                 self._exec(f"{mmseqs} createdb {f.path} {self.TEMP}/db")
                 #cluster
-                print("Clustering")
+                #print("Clustering")
                 self._exec(f"{mmseqs} cluster {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/tmp --min-seq-id {min_seq_id} --cov-mode {cov_mode} -k {k} --threads {threads} -s {s} --cluster-mode {cluster_mode}")
                 #export tsv
                 #self._exec(f"{mmseqs} createtsv {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.tsv")
                 #export fasta
-                print("Parsing result")
+                #print("Parsing result")
                 self._exec(f"{mmseqs} createseqfiledb {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.seq")
                 self._exec(f"{mmseqs} result2flat {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster.seq {self.TEMP}/cluster.fas")
                 try:
@@ -795,6 +795,7 @@ class NanoAct():
                     print("Error reading output file", e)
                     continue
                 #save each cluster to file
+                print(f"Number of clusters", len(bin))
                 for cluster_no in bin:
                     if len(bin[cluster_no]) < min_read_num:
                         continue
