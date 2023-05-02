@@ -753,7 +753,7 @@ class NanoAct():
         #pd.DataFrame(pool)[['name','cluster','reads', 'organism','taxa','seq', 'BLAST_simil','BLAST_acc','BLAST_seq', 'funguild', 'funguild_notes']].to_csv(f"{des}/blast.csv", index=False)
         pd.DataFrame(pool).to_csv(f"{des}/{name}", index=False)
         return f"{des}/{name}"
-    def mmseqs_cluster(self, src, des, mmseqs="/nanoact/bin/mmseqs", min_seq_id=0.5, cov_mode=1, k=7, threads=8, s=7.5, cluster_mode=2, min_read_num = 0):
+    def mmseqs_cluster(self, src, des, mmseqs="/nanoact/bin/mmseqs", min_seq_id=0.5, cov_mode=0, k=14, threads=8, s=7.5, cluster_mode=0, min_read_num = 0):
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         mmseqs = f"{lib}/bin/mmseqs"
