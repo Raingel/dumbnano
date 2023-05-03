@@ -188,7 +188,7 @@ class NanoAct():
         # poll for results
         retry = 30
         while True:
-            time.sleep(30)
+            time.sleep(5)
             retry -= 1
             if retry == 0:
                 print("Search", rid, "timed out")
@@ -240,13 +240,42 @@ class NanoAct():
                 hit_seq = hit_hsp['Hsp_hseq'].replace('-', '')
                 hit_def = hit['Hit_def']
                 similarity = round(int(hit_hsp['Hsp_identity'])/int(hit_hsp['Hsp_align-len']),2)
+                
+                pool[seq_name] = {'acc': acc, 'hit_seq': hit_seq, 'hit_def': hit_def, 'similarity': similarity}
                 #Get taxon info
-                r = get('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=gb&retmode=xml&id={}'.format(acc))
-                #xml to json
-                r = xmltodict.parse(r.text)
-                org = r['GBSet']['GBSeq']['GBSeq_organism']
-                taxa = r['GBSet']['GBSeq']['GBSeq_taxonomy']
-                pool[seq_name] = {'acc': acc, 'hit_seq': hit_seq, 'hit_def': hit_def, 'org': org, 'taxa': taxa, 'similarity': similarity}
+                taxon_info_URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=gb&retmode=xml&id={}'.format(acc)
+                try:
+                    r = get(taxon_info_URI)
+                    #xml to json
+                    r = xmltodict.parse(r.text)
+                    org = r['GBSet']['GBSeq']['GBSeq_organism']
+                    #taxa = r['GBSet']['GBSeq']['GBSeq_taxonomy']
+                    #Get taxid in db_xref
+                    #Get db_xref
+                    for i in r['GBSet']['GBSeq']['GBSeq_feature-table']['GBFeature']:
+                        if i['GBFeature_key'] == 'source':
+                            for j in i['GBFeature_quals']['GBQualifier']:
+                                if j['GBQualifier_name'] == 'db_xref':
+                                    taxid = j['GBQualifier_value'].split(':')[-1]
+                    pool[seq_name].update({'org': org, 'taxid': taxid})
+                except Exception as e:
+                    print(e)
+                    pass
+                #Get all ranks
+                ranks = {"kingdom":"incertae sedis", "phylum":"incertae sedis", "class":"incertae sedis", "order":"incertae sedis", "family":"incertae sedis", "genus":"incertae sedis"}
+                try:
+                    #Get details from taxid
+                    taxid_info_URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&rettype=xml&id={}'.format(taxid)
+                    r = get(taxid_info_URI)
+                    r = xmltodict.parse(r.text)
+                    for i in r['TaxaSet']['Taxon']['LineageEx']['Taxon']:
+                        if i['Rank'] in ranks.keys():
+                            ranks[i['Rank']] = i['ScientificName']
+                    
+                    pool[seq_name].update(ranks)
+                except Exception as e:
+                    print(e)
+                    pass
         return pool
     def _get_sample_id (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
@@ -673,13 +702,10 @@ class NanoAct():
                     print(e)
                     retry -= 1
             i+=batch
+        print(blast_result_pool)
         for sample in blast_result_pool.keys():
-            pool_df.loc[sample, 'org'] = blast_result_pool[sample]['org']
-            pool_df.loc[sample, 'similarity'] = blast_result_pool[sample]['similarity']
-            pool_df.loc[sample, 'taxa'] = blast_result_pool[sample]['taxa']
-            pool_df.loc[sample, 'acc'] = blast_result_pool[sample]['acc']
-            pool_df.loc[sample, 'hit_def'] = blast_result_pool[sample]['hit_def']
-            pool_df.loc[sample, 'hit_seq'] = blast_result_pool[sample]['hit_seq']
+            for key in blast_result_pool[sample].keys():
+                pool_df.loc[sample,key] = blast_result_pool[sample][key]
 
             #Check funguild
             if funguild and blast_result_pool[sample]['org'] != "":
