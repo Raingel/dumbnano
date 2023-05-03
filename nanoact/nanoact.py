@@ -188,7 +188,7 @@ class NanoAct():
         # poll for results
         retry = 30
         while True:
-            time.sleep(5)
+            time.sleep(30)
             retry -= 1
             if retry == 0:
                 print("Search", rid, "timed out")
@@ -241,7 +241,7 @@ class NanoAct():
                 hit_def = hit['Hit_def']
                 similarity = round(int(hit_hsp['Hsp_identity'])/int(hit_hsp['Hsp_align-len']),2)
                 
-                pool[seq_name] = {'acc': acc, 'hit_seq': hit_seq, 'hit_def': hit_def, 'similarity': similarity}
+                pool[seq_name] = {'acc': acc, 'hit_seq': hit_seq, 'hit_def': hit_def, 'similarity': similarity, 'org': ""}
                 #Get taxon info
                 taxon_info_URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&rettype=gb&retmode=xml&id={}'.format(acc)
                 try:
@@ -277,6 +277,80 @@ class NanoAct():
                     print(e)
                     pass
         return pool
+    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", max_query_length=500, batch = 5):
+        #Collect all sequences
+        pool_df = pd.DataFrame() 
+        query_seqs=[] 
+        for f in os.scandir(src):
+            if f.name.startswith(startswith) and f.name.endswith(".fas"):
+                with open(f.path, 'r') as handle:
+                    seqs = list(self._fasta_reader(handle))
+                    for s in seqs:
+                        pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
+                        if len(s['seq']) >= max_query_length:
+                            #If sequence is too long, preserve only max_query_length in middle
+                            diff = len(s['seq']) - max_query_length
+                            s['seq'] = s['seq'][int(diff/2):int(diff/2)+max_query_length]
+                        query_seqs.append(f">{s['title']}\n{s['seq']}")       
+        #set title as index
+        pool_df.set_index('title', inplace=True)
+        for index, row in pool_df.iterrows():
+            pool_df.loc[index, 'length'] = str(len(row['seq']))
+            try:
+                #2110_cluster_-1_r2154.fas	
+                #{sample}_cluster_{cluster_no}_r{reads_count}.fas
+                sample, cluster_no, reads_count = re.search("(.*)_cluster_([-0-9]+)_r(\d+).fas", index).groups()
+                pool_df.loc[index, 'sample'] = sample
+                pool_df.loc[index, 'cluster_no'] = cluster_no
+                pool_df.loc[index, 'reads_count'] = reads_count
+            except Exception as e:
+                print(e)
+                pass    
+        #Blast all sequences
+        i = 0
+        blast_result_pool = {}
+        while i < len(query_seqs):
+            print("Blasting", i, "to", i+batch, "of", len(query_seqs))
+            query = "\n".join(query_seqs[i:i+batch])
+            retry = 3
+            while retry >= 0:
+                try:
+                    blast_result = self.NCBIblast(query)
+                    if blast_result != None:
+                        blast_result_pool.update(blast_result)
+                        break
+                    else:
+                        retry -= 1
+                except Exception as e:
+                    print(e)
+                    retry -= 1
+            i+=batch
+        #print(blast_result_pool)
+        for sample in blast_result_pool.keys():
+            for key in blast_result_pool[sample].keys():
+                pool_df.loc[sample,key] = blast_result_pool[sample][key]
+
+            #Check funguild
+
+            if funguild and blast_result_pool[sample]['org'] != "":
+                funguild_des = []
+                try:
+                    funguild_des = json.loads(get(f"https://www.mycoportal.org/funguild/services/api/db_return.php?qDB=funguild_db&qField=taxon&qText={blast_result_pool[sample]['org']}").text)
+                except:
+                    pass
+                if funguild_des != []:
+                    #print(funguild_des)
+                    try:
+                        pool_df.loc[sample,'funguild'] = funguild_des[0]['guild']
+                    except:
+                        pass
+                    try:
+                        pool_df.loc[sample,'funguild_notes'] = funguild_des[0]['notes']
+                    except:
+                        pass
+        pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
+        return f"{des}/{name}"
+ 
     def _get_sample_id (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
         ids = []
@@ -654,78 +728,6 @@ class NanoAct():
                 except:
                     pass
     """
-    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", max_query_length=500, batch = 5):
-        #Collect all sequences
-        pool_df = pd.DataFrame() 
-        query_seqs=[] 
-        for f in os.scandir(src):
-            if f.name.startswith(startswith) and f.name.endswith(".fas"):
-                with open(f.path, 'r') as handle:
-                    seqs = list(self._fasta_reader(handle))
-                    for s in seqs:
-                        pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
-                        if len(s['seq']) >= max_query_length:
-                            #If sequence is too long, preserve only max_query_length in middle
-                            diff = len(s['seq']) - max_query_length
-                            s['seq'] = s['seq'][int(diff/2):int(diff/2)+max_query_length]
-                        query_seqs.append(f">{s['title']}\n{s['seq']}")       
-        #set title as index
-        pool_df.set_index('title', inplace=True)
-        for index, row in pool_df.iterrows():
-            pool_df.loc[index, 'length'] = str(len(row['seq']))
-            try:
-                #2110_cluster_-1_r2154.fas	
-                #{sample}_cluster_{cluster_no}_r{reads_count}.fas
-                sample, cluster_no, reads_count = re.search("(.*)_cluster_([-0-9]+)_r(\d+).fas", index).groups()
-                pool_df.loc[index, 'sample'] = sample
-                pool_df.loc[index, 'cluster_no'] = cluster_no
-                pool_df.loc[index, 'reads_count'] = reads_count
-            except Exception as e:
-                print(e)
-                pass    
-        #Blast all sequences
-        i = 0
-        blast_result_pool = {}
-        while i < len(query_seqs):
-            print("Blasting", i, "to", i+batch, "of", len(query_seqs))
-            query = "\n".join(query_seqs[i:i+batch])
-            retry = 3
-            while retry >= 0:
-                try:
-                    blast_result = self.NCBIblast(query)
-                    if blast_result != None:
-                        blast_result_pool.update(blast_result)
-                        break
-                    else:
-                        retry -= 1
-                except Exception as e:
-                    print(e)
-                    retry -= 1
-            i+=batch
-        print(blast_result_pool)
-        for sample in blast_result_pool.keys():
-            for key in blast_result_pool[sample].keys():
-                pool_df.loc[sample,key] = blast_result_pool[sample][key]
-
-            #Check funguild
-            if funguild and blast_result_pool[sample]['org'] != "":
-                funguild_des = []
-                try:
-                    funguild_des = json.loads(get(f"https://www.mycoportal.org/funguild/services/api/db_return.php?qDB=funguild_db&qField=taxon&qText={blast_result_pool[sample]['org']}").text)
-                except:
-                    pass
-                if funguild_des != []:
-                    #print(funguild_des)
-                    try:
-                        pool_df.loc[sample,'funguild'] = funguild_des[0]['guild']
-                    except:
-                        pass
-                    try:
-                        pool_df.loc[sample,'funguild_notes'] = funguild_des[0]['notes']
-                    except:
-                        pass
-        pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
-        return f"{des}/{name}"
     def blast(self, src, des, name="blast.csv", funguild = True, startswith="con_"):
         pool = []
         for f in os.scandir(src):
