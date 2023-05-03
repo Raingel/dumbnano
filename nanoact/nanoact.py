@@ -210,6 +210,7 @@ class NanoAct():
                     print("No hits found.")
         # retrieve and display results
         url = f'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID={rid}&FORMAT_TYPE=XML'
+        print("Retrieving results from", url)
         response = get(url)
         #Convert the XML to a dictionary
         blast_dict = xmltodict.parse(response.text)
