@@ -253,6 +253,7 @@ class NanoAct():
                     #taxa = r['GBSet']['GBSeq']['GBSeq_taxonomy']
                     #Get taxid in db_xref
                     #Get db_xref
+                    taxid=""
                     for i in r['GBSet']['GBSeq']['GBSeq_feature-table']['GBFeature']:
                         if i['GBFeature_key'] == 'source':
                             for j in i['GBFeature_quals']['GBQualifier']:
@@ -266,13 +267,14 @@ class NanoAct():
                 ranks = {"kingdom":"incertae sedis", "phylum":"incertae sedis", "class":"incertae sedis", "order":"incertae sedis", "family":"incertae sedis", "genus":"incertae sedis"}
                 try:
                     #Get details from taxid
+                    if taxid == "":
+                        continue
                     taxid_info_URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&rettype=xml&id={}'.format(taxid)
                     r = get(taxid_info_URI)
                     r = xmltodict.parse(r.text)
                     for i in r['TaxaSet']['Taxon']['LineageEx']['Taxon']:
                         if i['Rank'] in ranks.keys():
                             ranks[i['Rank']] = i['ScientificName']
-                    
                     pool[seq_name].update(ranks)
                 except Exception as e:
                     print(e)

@@ -4,4 +4,4 @@ data/
 tmp/
 *.fas
 *.tsv
-main.ipynb
+*.ipynb
