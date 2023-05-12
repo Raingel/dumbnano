@@ -5,3 +5,4 @@ tmp/
 *.fas
 *.tsv
 *.ipynb
+main.ipynb

@@ -834,4 +834,48 @@ class NanoAct():
                         for rec in bin[cluster_no]:
                             handle.write(f">{rec['title']}\n{rec['seq']}\n")
         return des
-                
+
+    def vsearch_OTUs(self, src, des, vsearch="/nanoact/bin/vsearch", id=0.9):
+        #Get current library file  path
+        lib = os.path.dirname(os.path.realpath(__file__))
+        vsearch = f"{lib}/bin/vsearch"
+        try:
+            os.makedirs(des)
+        except:
+            pass
+        abs_des = os.path.abspath(des)
+        for f in os.scandir(src):
+            if f.is_file() and f.name.endswith(".fas"):
+                print("Clustering", f.name)   
+                sample = f.name.split(".fas")[0]
+                #clean up temp folder
+                self._clean_temp()
+                self._exec(f"{vsearch} --cluster_size {f.path} --id {id} --strand plus --sizein --sizeout --fasta_width 0 --uc {self.TEMP}/all.clustered.uc --relabel OTU_ --centroids {self.TEMP}/all.otus.fasta --otutabout {self.TEMP}/all.otutab.txt --clusters {self.TEMP}/cluster ",
+                           suppress_output=False
+                           )
+                #read cluster uc file
+                uc = pd.read_csv(f"{self.TEMP}/all.clustered.uc", sep="\t", header=None)
+                #Writing each cluster to file
+                uc = uc[uc[0].isin(["S","H"])]
+                uc.sort_values(by=8,ascending=False,inplace=True)
+                seqs = list(self._fasta_reader(open(f.path,"r")))
+                seqs = sorted(seqs,key=lambda d: d['title'])
+                #export row 8 and row 1 as a list with {key:8 and value:1}
+                seq_name_clust = uc[[8,1]].to_dict(orient="records")
+                #separate each cluster to bin
+                bin = {}
+                for seq in seqs:
+                    for name_clust in seq_name_clust:
+                        if name_clust[8] in seq['title']:
+                            seq_fas = f">{seq['title']}\n{seq['seq']}\n"
+                            try:
+                                bin[name_clust[1]].append(seq_fas)
+                            except KeyError:
+                                bin[name_clust[1]] = [seq_fas]
+                for cluster_no in bin:
+                    with open(f"{abs_des}/{sample}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
+                        for seq in bin[cluster_no]:
+                            handle.write(seq)
+                #Copy otu table to destination
+                shutil.copy(f"{self.TEMP}/all.otutab.txt", f"{abs_des}/{sample}_otu_table.txt")
+
