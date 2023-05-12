@@ -851,7 +851,7 @@ class NanoAct():
                 #clean up temp folder
                 self._clean_temp()
                 self._exec(f"{vsearch} --cluster_size {f.path} --id {id} --strand plus --sizein --sizeout --fasta_width 0 --uc {self.TEMP}/all.clustered.uc --relabel OTU_ --centroids {self.TEMP}/all.otus.fasta --otutabout {self.TEMP}/all.otutab.txt --clusters {self.TEMP}/cluster ",
-                           suppress_output=False
+                           suppress_output=True
                            )
                 #read cluster uc file
                 try:
