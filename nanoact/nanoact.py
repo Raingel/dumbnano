@@ -854,7 +854,11 @@ class NanoAct():
                            suppress_output=False
                            )
                 #read cluster uc file
-                uc = pd.read_csv(f"{self.TEMP}/all.clustered.uc", sep="\t", header=None)
+                try:
+                    uc = pd.read_csv(f"{self.TEMP}/all.clustered.uc", sep="\t", header=None)
+                except:
+                    print("Error reading output file", sample)
+                    continue
                 #Writing each cluster to file
                 uc = uc[uc[0].isin(["S","H"])]
                 uc.sort_values(by=8,ascending=False,inplace=True)
