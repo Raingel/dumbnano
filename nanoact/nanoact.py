@@ -353,38 +353,7 @@ class NanoAct():
                         pass
         pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
         return f"{des}/{name}"
- 
-    def _get_sample_id (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
-        # Define a helper function to identify the sample ID of a sequence read based on its barcode
-        ids = []
-        integrity = []
-        seq = seq.upper()
-        seqF = seq[:100]
-        seqR = seq[-100:]
-        # Convert the input sequence read to uppercase and extract the beginning and end segments
-        for id in barcode_hash_table:
-            # Iterate through the hash table of barcodes and their corresponding index sequences
-            FwIndex = barcode_hash_table[id]["FwIndex"].upper()
-            RvAnchor = barcode_hash_table[id]["RvAnchor"].upper()
-            # Extract the forward and reverse index sequences of the current barcode and convert to uppercase
-            FwIndex_check = edlib.align(FwIndex,seqF, mode="HW", k=int(len(FwIndex) * mismatch_ratio_f), task="locations")
-            RvAnchor_check = edlib.align(RvAnchor,seqR, mode="HW", k=int(len(RvAnchor) * mismatch_ratio_r), task="locations")
-            # Align the forward and reverse index sequences with the beginning and end of the input sequence read, allowing for a certain number of mismatches defined by the mismatch ratio
-            if FwIndex_check["editDistance"] != -1:
-                #mark founded region to lower case
-                seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]].lower() + seqF[FwIndex_check["locations"][0][1]:]
-                if RvAnchor_check["editDistance"] != -1:
-                    #mark founded region to lower case
-                    seqR = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]].lower() + seqR[RvAnchor_check["locations"][0][1]:]
-                    ids.append(id)
-                    integrity.append(True)
-                else:
-                    ids.append(id)
-                    integrity.append(False)
-        #Paste back modified seq
-        seq = seqF +seq[100:-100] + seqR
-        # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
-        return ids, integrity, seq
+
     def _mafft (self, src, des):
         mafft_bin = self._lib_path() + "/bin/mafft.bat"
         #./mafft.bat --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
@@ -441,6 +410,38 @@ class NanoAct():
                         out.write(f">{f.name}\n{consensus}")
 
         return abs_des
+ 
+    def _get_sample_id (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
+        # Define a helper function to identify the sample ID of a sequence read based on its barcode
+        ids = []
+        integrity = []
+        seq = seq.upper()
+        seqF = seq[:100]
+        seqR = seq[-100:]
+        # Convert the input sequence read to uppercase and extract the beginning and end segments
+        for id in barcode_hash_table:
+            # Iterate through the hash table of barcodes and their corresponding index sequences
+            FwIndex = barcode_hash_table[id]["FwIndex"].upper()
+            RvAnchor = barcode_hash_table[id]["RvAnchor"].upper()
+            # Extract the forward and reverse index sequences of the current barcode and convert to uppercase
+            FwIndex_check = edlib.align(FwIndex,seqF, mode="HW", k=int(len(FwIndex) * mismatch_ratio_f), task="locations")
+            RvAnchor_check = edlib.align(RvAnchor,seqR, mode="HW", k=int(len(RvAnchor) * mismatch_ratio_r), task="locations")
+            # Align the forward and reverse index sequences with the beginning and end of the input sequence read, allowing for a certain number of mismatches defined by the mismatch ratio
+            if FwIndex_check["editDistance"] != -1:
+                #mark founded region to lower case
+                seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]].lower() + seqF[FwIndex_check["locations"][0][1]:]
+                if RvAnchor_check["editDistance"] != -1:
+                    #mark founded region to lower case
+                    seqR = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]].lower() + seqR[RvAnchor_check["locations"][0][1]:]
+                    ids.append(id)
+                    integrity.append(True)
+                else:
+                    ids.append(id)
+                    integrity.append(False)
+        #Paste back modified seq
+        seq = seqF +seq[100:-100] + seqR
+        # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
+        return ids, integrity, seq
     def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3):
         """
         1.Process the raw sequencing file using a fastq_reader function which reads in four lines at a time representing one sequencing read.
@@ -868,18 +869,98 @@ class NanoAct():
                 seq_name_clust = uc[[8,1]].to_dict(orient="records")
                 #separate each cluster to bin
                 bin = {}
-                for seq in seqs:
-                    for name_clust in seq_name_clust:
+                for name_clust in seq_name_clust:
+                    for seq in seqs:
                         if name_clust[8] in seq['title']:
                             seq_fas = f">{seq['title']}\n{seq['seq']}\n"
                             try:
                                 bin[name_clust[1]].append(seq_fas)
                             except KeyError:
                                 bin[name_clust[1]] = [seq_fas]
+                            #remove seq from seqs to speed up next search
+                            seqs.remove(seq)
+                            break
                 for cluster_no in bin:
                     with open(f"{abs_des}/{sample}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
                         for seq in bin[cluster_no]:
                             handle.write(seq)
                 #Copy otu table to destination
                 shutil.copy(f"{self.TEMP}/all.otutab.txt", f"{abs_des}/{sample}_otu_table.txt")
+
+    def cd_hit_est(self, src, des, cd_hit_est="./nanoact/bin/cd-hit-est", id=0.9, n=10):
+        #Get current library file  path
+        lib = os.path.dirname(os.path.realpath(__file__))
+        cd_hit_est = f"{lib}/bin/cd-hit-est"
+        try:
+            os.makedirs(des)
+        except:
+            pass
+        abs_des = os.path.abspath(des)
+        for f in os.scandir(src):
+            if f.is_file() and f.name.endswith(".fas"):
+                print("Clustering", f.name)   
+                sample = f.name.split(".fas")[0]
+                #clean up temp folder
+                self._clean_temp()
+                #-i input file
+                #-o output file
+                #-c sequence identity threshold
+                #-n Suggested word size: 8,9,10 for thresholds 0.90 ~ 1.0 7 for thresholds 0.88 ~ 0.9 6 for thresholds 0.85 ~ 0.88 5 for thresholds 0.80 ~ 0.85 4 for thresholds 0.75 ~ 0.8
+                #-d length of description in .clstr file, default 20
+                self._exec(f"{cd_hit_est} -i {f.path} -o {self.TEMP}/cdhit.fas -c {id} -n {n} -d 0")
+                #Try read clstr file
+                try:
+                    with open(f"{self.TEMP}/cdhit.fas.clstr", 'r') as handle:
+                        bin = {}
+                        for line in handle:
+                            if line.startswith(">Cluster"):
+                                cluster_no = line.split()[1]
+                                bin[cluster_no] = []
+                            else:
+                                title = line.split(">")[1].split("...")[0]
+                                bin[cluster_no].append(title)
+                except:
+                    print("Error reading output file", sample)
+                    continue
+
+                #Reading original sequence file
+                with open(f.path, 'r') as handle:
+                    seqs = list(self._fasta_reader(handle))
+                #Write each cluster to a file
+                for cluster in bin:
+                    with open(f"{abs_des}/{sample}_cluster_{cluster}_r{len(bin[cluster])}.fas", 'w') as handle:
+                        for seq_title in bin[cluster]:
+                            for read in seqs:
+                                if seq_title in read['title']:
+                                    handle.write(f">{read['title']}\n{read['seq']}\n")
+                                    #remove used read from the list, so that it won't be used again
+                                    seqs.remove(read)
+                                    break
+
+
+
+
+
+    def _calculate_5mer_frequency(self, sequence):
+        frequency = {}
+        for i in range(len(sequence) - 4):
+            kmer = sequence[i:i+5]
+            frequency[kmer] = frequency.get(kmer, 0) + 1
+        return frequency
+    
+    def fas_to_5mer(self, fas_path):
+        frequency_vectors = []
+        sequences = []
+        for rec in self._fasta_reader(open(fas_path,"r")):
+            frequency_vectors.append(self._calculate_5mer_frequency(rec['seq']))
+            sequences.append(rec['title'])
+        # Create a DataFrame to store the frequency vectors
+        df = pd.DataFrame(frequency_vectors)
+        # Add a column for the sequence identifiers
+        df['Sequence'] = ['Sequence {}'.format(i+1) for i in range(len(sequences))]
+        # Reorder the columns to have 'Sequence' as the first column
+        df = df[['Sequence'] + list(df.columns[:-1])]
+        #fill nan with 0
+        df.fillna(0, inplace=True)
+        return df
 

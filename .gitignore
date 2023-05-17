@@ -2,6 +2,7 @@
 __pycache__/
 data/
 tmp/
+temp/
 *.fas
 *.tsv
 *.ipynb
