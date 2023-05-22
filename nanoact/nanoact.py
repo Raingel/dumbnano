@@ -733,10 +733,19 @@ class NanoAct():
                     check_both_directions = True,
                     reverse_complement_rv = True,
                     ):
-        #input: folder containing fasta files
-        #input: tsv or csv file containing FwPrimer and RvPrimer sequences 
-        #output: folder containing fasta files with primers removed
-        #Note: raw reads should be oriented in the same direction first (e.g. using orientation())
+        # This function removes primers from fasta files based on the provided barcode index file.
+        # src: folder containing fasta files
+        # des: folder to save the output fasta files
+        # BARCODE_INDEX_FILE: tsv or csv file containing SampleID, FwPrimer, and RvPrimer columns
+        # fw_col: column name for the forward primer sequence in the barcode index file
+        # rv_col: column name for the reverse primer sequence in the barcode index file
+        # mismatch_ratio_f: maximum allowed mismatch ratio for the forward primer sequence
+        # mismatch_ratio_r: maximum allowed mismatch ratio for the reverse primer sequence
+        # fw_offset: offset for the forward primer sequence
+        # rv_offset: offset for the reverse primer sequence
+        # discard_no_match: whether to discard sequences that do not match the primers
+        # check_both_directions: whether to check both forward and reverse complement sequences
+        # reverse_complement_rv: whether to reverse complement the reverse primer sequence
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
