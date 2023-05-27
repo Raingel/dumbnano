@@ -907,12 +907,14 @@ class NanoAct():
             #Check if SampleID, FwPrimer, RvPrimer columns exist
             if not all (x in df.columns for x in ["SampleID", fw_col, rv_col]):
                 raise Exception(f"BARCODE_INDEX_FILE should contain SampleID, {fw_col}, {rv_col} columns")
+            #Make sure all columns are string
+            df = df.astype(str)
         except Exception as e:
             print(e)
         for f in os.scandir(src):
             if f.name.endswith(".fas"):   
-                print("Processing", f.name)
                 SampleID = f.name.replace(".fas","")
+                print("Processing", SampleID)
                 try:
                     fw_trim = df.loc[df['SampleID'] == SampleID][fw_col].values[0]
                     rv_trim = df.loc[df['SampleID'] == SampleID][rv_col].values[0]
@@ -934,48 +936,34 @@ class NanoAct():
                         for s in self._fasta_reader(infile):
                             total += 1
                             seq_upper = s['seq'].upper()
-                            try:
-                                #use edlib to find fw_trim and rv_trim in the sequence
-                                fw_loc = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
-                                rv_loc = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
-                                #Check if both fw_loc and rv_loc are found
-                                if fw_loc['locations'] and rv_loc['locations'] and (rv_loc['locations'][0][0]-fw_loc['locations'][0][1]) > 0:
-                                    #write trimmed sequence
-                                    #print("F", fw_loc, rv_loc)
-                                    outfile.write(">{}\n{}\n".format(s['title'],s['seq'][fw_loc['locations'][0][1]+fw_offset:rv_loc['locations'][0][0]-rv_offset]))
+                            #Trim fw_trim from the beginning of the sequence first, then trim rv_trim from the end of the sequence
+                            #And if none of fw_trim and rv_trim is found and check_both_directions is True, check the reverse complement sequence
+                            #If fw_trim and rv_trim are still not found, discard the sequence if discard_no_match is True
+                            fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
+                            if (fw['locations'] != []):
+                                trimmed_F += 1
+                                seq_upper = seq_upper[fw['locations'][0][1]+fw_offset:]
+                            rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
+                            if (rv['locations'] != []):
+                                trimmed_R += 1
+                                seq_upper = seq_upper[:rv['locations'][0][0]-rv_offset]
+                            if (fw['locations'] == []) and (rv['locations'] == []) and check_both_directions:
+                                seq_upper = self._reverse_complement(seq_upper)
+                                fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
+                                if (fw['locations'] != []):
                                     trimmed_F += 1
-                                elif check_both_directions:
-                                    #Reverse complement the sequence and try again
-                                    seq_upper = self._reverse_complement(seq_upper)
-                                    fw_loc = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
-                                    rv_loc = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
-                                    if fw_loc['locations'] and rv_loc['locations'] and (rv_loc['locations'][0][0]-fw_loc['locations'][0][1]) > 0:
-                                        #reverse complement the sequence
-                                        reversed_seq = self._reverse_complement(s['seq'])
-                                        #write trimmed sequence
-                                        #print("R", fw_loc, rv_loc)
-                                        outfile.write(">{}\n{}\n".format(s['title'],reversed_seq[fw_loc['locations'][0][1]+fw_offset:rv_loc['locations'][0][0]-rv_offset]))
-                                        trimmed_R += 1
-                                    elif discard_no_match:
-                                        pass
-                                    else:
-                                        #write original sequence
-                                        outfile.write(">Not_found_{}\n{}\n".format(s['title'],s['seq']))
-                                else:
-                                    if discard_no_match != True:
-                                        #write original sequence
-                                        outfile.write(">Not_found_{}\n{}\n".format(s['title'],s['seq']))
-                            except Exception as e:
-                                print(e)
-                                continue
-                print("Total reads:", total, "Trimmed(foward):", trimmed_F, "Trimmed(reverse):", trimmed_R, "No match:", total-trimmed_F-trimmed_R)
-
-
-
-
-
-
-
+                                    seq_upper = seq_upper[fw['locations'][0][1]+fw_offset:]
+                                rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
+                                if (rv['locations'] != []):
+                                    trimmed_R += 1
+                                    seq_upper = seq_upper[:rv['locations'][0][0]-rv_offset]
+                                if (fw['locations'] == []) and (rv['locations'] == []) and discard_no_match:
+                                    continue
+                                #turn the sequence back to the original direction
+                                seq_upper = self._reverse_complement(seq_upper)
+                            outfile.write(f">{s['title']}\n{seq_upper}\n")
+                        print(f"Total reads: {total}, trimmed forward: {trimmed_F}, trimmed reverse: {trimmed_R}")
+        return des
 
     """
     def medaka (self, src, des, startswith="con_"):
