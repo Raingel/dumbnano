@@ -418,15 +418,15 @@ class NanoAct():
  
 
 
-    def _get_sample_id_single (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
+    def _get_sample_id_single (self, seq, barcode_hash_table, check_segment_length=150, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
         ids = []
         integrity = []
         seqs = []
         # Convert the input sequence read to uppercase and extract the beginning and end segments
         seq = seq.upper()
-        seqF = seq[:150]
-        seqR = seq[-150:]
+        seqF = seq[:check_segment_length]
+        seqR = seq[-check_segment_length:]
         
         for id in barcode_hash_table:
             # Iterate through the hash table of barcodes and their corresponding index sequences
@@ -448,7 +448,7 @@ class NanoAct():
                 else:
                     ids.append(id)
                     integrity.append(False)
-                seqs.append(seqF +seq[150:-150] + seqR)
+                seqs.append(seqF +seq[check_segment_length:-check_segment_length] + seqR)
         # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
         return ids, integrity, seqs
     def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3):
