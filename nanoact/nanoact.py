@@ -416,6 +416,8 @@ class NanoAct():
 
         return abs_des
  
+
+
     def _get_sample_id_single (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
         ids = []
@@ -435,11 +437,12 @@ class NanoAct():
             RvAnchor_check = edlib.align(RvAnchor,seqR, mode="HW", k=int(len(RvAnchor) * mismatch_ratio_r), task="locations")
             # Align the forward and reverse index sequences with the beginning and end of the input sequence read, allowing for a certain number of mismatches defined by the mismatch ratio
             if FwIndex_check["editDistance"] != -1:
-                #mark founded region to lower case
+                #mark found region to lower case
                 seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]].lower() + seqF[FwIndex_check["locations"][0][1]:]
                 if RvAnchor_check["editDistance"] != -1:
-                    #mark founded region to lower case
-                    seqR = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]].lower() + seqR[RvAnchor_check["locations"][0][1]:]
+                    if RvAnchor != "":
+                        #If RvAnchor is set, mark found region to lower case
+                        seqR = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]].lower() + seqR[RvAnchor_check["locations"][0][1]:]
                     ids.append(id)
                     integrity.append(True)
                 else:
@@ -448,47 +451,6 @@ class NanoAct():
                 seqs.append(seqF +seq[150:-150] + seqR)
         # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
         return ids, integrity, seqs
-    def _get_sample_id_dual (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15, mismatch_ratio_r = 0.15):
-        ids = []
-        seqs = []
-        # Convert the input sequence read to uppercase and extract the beginning and end segments
-        seq = seq.upper()
-        seqF = seq[:150]
-        seqR = seq[-150:]
-        seq_REV = self._reverse_complement(seq)
-        seq_REV_F = seq_REV[:150]
-        seq_REV_R = seq_REV[-150:]
-        
-        for id in barcode_hash_table:
-            # Iterate through the hash table of barcodes and their corresponding index sequences
-            FwIndex = barcode_hash_table[id]["FwIndex"].upper()
-            RvIndex = barcode_hash_table[id]["RvIndex"].upper()
-            #Reverse complement the reverse index sequence
-            RvIndex = self._reverse_complement(RvIndex)
-            # Extract the forward and reverse index sequences of the current barcode and convert to uppercase
-            FwIndex_check = edlib.align(FwIndex,seqF, mode="HW", k=int(len(FwIndex) * mismatch_ratio_f), task="locations")
-            RvIndex_check = edlib.align(RvIndex,seqR, mode="HW", k=int(len(RvIndex) * mismatch_ratio_r), task="locations")
-            #Check read in reverse complement
-            Fwindex_check_R = edlib.align(FwIndex,seq_REV_F, mode="HW", k=int(len(FwIndex) * mismatch_ratio_f), task="locations")
-            Rvindex_check_R = edlib.align(RvIndex,seq_REV_R, mode="HW", k=int(len(RvIndex) * mismatch_ratio_r), task="locations")
-            #print(FwIndex,seqF,RvIndex,seqR)
-            #print("FwIndex_check",FwIndex_check, "RvIndex_check",RvIndex_check)
-            if FwIndex_check["editDistance"] != -1 and RvIndex_check["editDistance"] != -1:
-                #mark founded region to lower case
-
-                seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]].lower() + seqF[FwIndex_check["locations"][0][1]:]
-                seqR = seqR[:RvIndex_check["locations"][0][0]] + seqR[RvIndex_check["locations"][0][0]:RvIndex_check["locations"][0][1]].lower() + seqR[RvIndex_check["locations"][0][1]:]
-                
-                ids.append(id)
-                seqs.append(seqF +seq[150:-150] + seqR)
-            elif Fwindex_check_R["editDistance"] != -1 and Rvindex_check_R["editDistance"] != -1:
-                #mark founded region to lower case
-                seq_REV_F = seq_REV_F[:Fwindex_check_R["locations"][0][0]] + seq_REV_F[Fwindex_check_R["locations"][0][0]:Fwindex_check_R["locations"][0][1]].lower() + seq_REV_F[Fwindex_check_R["locations"][0][1]:]
-                seq_REV_R = seq_REV_R[:Rvindex_check_R["locations"][0][0]] + seq_REV_R[Rvindex_check_R["locations"][0][0]:Rvindex_check_R["locations"][0][1]].lower() + seq_REV_R[Rvindex_check_R["locations"][0][1]:]
-                ids.append(id)
-                seqs.append(seq_REV_F +seq[150:-150] + seq_REV_R)
-        return ids, seqs
-
     def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3):
         """
         1.Process the raw sequencing file using a fastq_reader function which reads in four lines at a time representing one sequencing read.
@@ -514,7 +476,11 @@ class NanoAct():
         # Check whether the barcode index file has the required columns
         barcode_hash_table = {}
         for index, row in BARCODE_IDX_DF.iterrows():
-            barcode_hash_table[row["SampleID"]] = {"FwIndex": str(row["FwIndex"]), "RvAnchor": str(row["RvAnchor"]), "ExpectedLength": row["ExpectedLength"]}
+            #Check if RvAnchor is nan
+            if pd.isnull(row["RvAnchor"]):
+                row["RvAnchor"] = ""
+            barcode_hash_table[row["SampleID"]] = {"FwIndex": row["FwIndex"], "RvAnchor": row["RvAnchor"], "ExpectedLength": row["ExpectedLength"]}
+
         # Store the barcode index file as a hash table of barcode-sample ID pairs
         pool = {}
         counter = 0
@@ -535,7 +501,7 @@ class NanoAct():
                         pool["TRUNCATED"].append(record)
                     else:
                         #Check if seq in ExpectedLength
-                        if (len(seq) - barcode_hash_table[ids[0]]["ExpectedLength"])**2 < (barcode_hash_table[ids[0]]["ExpectedLength"] * expected_length_variation)**2:
+                        if (len(seqs[0]) - barcode_hash_table[ids[0]]["ExpectedLength"])**2 < (barcode_hash_table[ids[0]]["ExpectedLength"] * expected_length_variation)**2:
                             pool[ids[0]].append(record)
                         else:
                             pool["IncorrectLength"].append(record)
@@ -576,7 +542,46 @@ class NanoAct():
         FAILED_NUM = len(pool['UNKNOWN']) + len(pool['MULTIPLE']) + len(pool['TRUNCATED'])
         print (f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
         return des
+    def _get_sample_id_dual (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15, mismatch_ratio_r = 0.15):
+        ids = []
+        seqs = []
+        # Convert the input sequence read to uppercase and extract the beginning and end segments
+        seq = seq.upper()
+        seqF = seq[:150]
+        seqR = seq[-150:]
+        seq_REV = self._reverse_complement(seq)
+        seq_REV_F = seq_REV[:150]
+        seq_REV_R = seq_REV[-150:]
+        
+        for id in barcode_hash_table:
+            # Iterate through the hash table of barcodes and their corresponding index sequences
+            FwIndex = barcode_hash_table[id]["FwIndex"].upper()
+            RvIndex = barcode_hash_table[id]["RvIndex"].upper()
+            #Reverse complement the reverse index sequence
+            RvIndex = self._reverse_complement(RvIndex)
+            # Extract the forward and reverse index sequences of the current barcode and convert to uppercase
+            FwIndex_check = edlib.align(FwIndex,seqF, mode="HW", k=int(len(FwIndex) * mismatch_ratio_f), task="locations")
+            RvIndex_check = edlib.align(RvIndex,seqR, mode="HW", k=int(len(RvIndex) * mismatch_ratio_r), task="locations")
+            #Check read in reverse complement
+            Fwindex_check_R = edlib.align(FwIndex,seq_REV_F, mode="HW", k=int(len(FwIndex) * mismatch_ratio_f), task="locations")
+            Rvindex_check_R = edlib.align(RvIndex,seq_REV_R, mode="HW", k=int(len(RvIndex) * mismatch_ratio_r), task="locations")
+            #print(FwIndex,seqF,RvIndex,seqR)
+            #print("FwIndex_check",FwIndex_check, "RvIndex_check",RvIndex_check)
+            if FwIndex_check["editDistance"] != -1 and RvIndex_check["editDistance"] != -1:
+                #mark found region to lower case
 
+                seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]].lower() + seqF[FwIndex_check["locations"][0][1]:]
+                seqR = seqR[:RvIndex_check["locations"][0][0]] + seqR[RvIndex_check["locations"][0][0]:RvIndex_check["locations"][0][1]].lower() + seqR[RvIndex_check["locations"][0][1]:]
+                
+                ids.append(id)
+                seqs.append(seqF +seq[150:-150] + seqR)
+            elif Fwindex_check_R["editDistance"] != -1 and Rvindex_check_R["editDistance"] != -1:
+                #mark found region to lower case
+                seq_REV_F = seq_REV_F[:Fwindex_check_R["locations"][0][0]] + seq_REV_F[Fwindex_check_R["locations"][0][0]:Fwindex_check_R["locations"][0][1]].lower() + seq_REV_F[Fwindex_check_R["locations"][0][1]:]
+                seq_REV_R = seq_REV_R[:Rvindex_check_R["locations"][0][0]] + seq_REV_R[Rvindex_check_R["locations"][0][0]:Rvindex_check_R["locations"][0][1]].lower() + seq_REV_R[Rvindex_check_R["locations"][0][1]:]
+                ids.append(id)
+                seqs.append(seq_REV_F +seq[150:-150] + seq_REV_R)
+        return ids, seqs
     def dualbar(self, src,des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3):
         """
         1.Process the raw sequencing file using a fastq_reader function which reads in four lines at a time representing one sequencing read.
@@ -586,6 +591,14 @@ class NanoAct():
         5.If multiple barcodes are identified, append it to the "MULTIPLE" dictionary.
         6.If no barcode is identified, append it to the "UNKNOWN" dictionary.
         7.Finally, output the demultiplexed reads into different output files based on their barcode.
+        dumb.dualbar(
+            src = "./data/1_Nanofilt/all.fastq",
+            des = "./data/dualbar/",
+            BARCODE_INDEX_FILE = "./data/230107_barcode.tsv",
+            mismatch_ratio_f = 0.15,
+            mismatch_ratio_r = 0.15, 
+            expected_length_variation = 5
+        )    
         """
         if BARCODE_INDEX_FILE.endswith(".tsv"):
             sep = "\t"
@@ -601,7 +614,7 @@ class NanoAct():
         # Create a hash table of barcodes and their corresponding index sequences
         barcode_hash_table = {}
         for index, row in BARCODE_IDX_DF.iterrows():
-            barcode_hash_table[row["SampleID"]] = {"FwIndex": str(row["FwIndex"]), "RvIndex": str(row["RvIndex"]), "ExpectedLength": row["ExpectedLength"]}
+            barcode_hash_table[row["SampleID"]] = {"FwIndex":row["FwIndex"], "RvIndex":row["RvIndex"], "ExpectedLength": row["ExpectedLength"]}
         # Create a dictionary to store the number of reads that are demultiplexed into each sample
         pool = {}
         counter = 0
