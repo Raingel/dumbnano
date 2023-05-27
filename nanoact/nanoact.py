@@ -451,7 +451,7 @@ class NanoAct():
                 seqs.append(seqF +seq[check_segment_length:-check_segment_length] + seqR)
         # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
         return ids, integrity, seqs
-    def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3):
+    def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3, check_segment_length=150):
         """
         1.Process the raw sequencing file using a fastq_reader function which reads in four lines at a time representing one sequencing read.
         2.For each read, call the _get_sample_id_single function to identify its corresponding sample ID and barcode integrity.
@@ -493,7 +493,7 @@ class NanoAct():
         # Initialize dictionaries for output files for each sample and additional dictionaries for reads with unknown, multiple, or truncated barcodes
         with open(src, "r") as handle:
             for record in self._fastq_reader(handle):
-                ids, integrity, seqs= self._get_sample_id_single(record["seq"], barcode_hash_table, mismatch_ratio_f, mismatch_ratio_r)
+                ids, integrity, seqs= self._get_sample_id_single(record["seq"], barcode_hash_table, check_segment_length, mismatch_ratio_f, mismatch_ratio_r)
                 if len(ids) == 1:
                     #if only one barcode is identified, append the read to the corresponding sample's output file
                     record["seq"] = seqs[0]
