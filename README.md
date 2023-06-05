@@ -13,8 +13,14 @@
     from nanoact import nanoact
     dumb = nanoact.NanoAct()
 
+
+
 ## Usage
-**1.combine_fastq() 解壓縮及合併所有fastq.gz檔案。**
+[combine_fastq()](#combine_fastq)
+
+---
+### combine_fastq
+**解壓縮及合併所有fastq.gz檔案。**
 
  大部分basecalling軟體會產生許多fastq.gz檔案，本功能可以將所有fastq.gz檔案合併成一個fastq檔案。
 ```mermaid
