@@ -14,9 +14,9 @@
     dumb = nanoact.NanoAct()
 
 ## Usage
+**1.combine_fastq() 解壓縮及合併所有fastq.gz檔案。**
 
-**解壓縮及合併所有fastq.gz檔案。**
- 大部分basecalling軟體會產生許多fastq.gz檔案，本功能為將所有fastq.gz檔案合併成一個fastq檔案
+ 大部分basecalling軟體會產生許多fastq.gz檔案，本功能可以將所有fastq.gz檔案合併成一個fastq檔案。
 ```mermaid
 flowchart LR
     1.fastq.gz-->|Uncompress| all.fastq
