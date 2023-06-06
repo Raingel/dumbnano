@@ -47,8 +47,11 @@ flowchart LR
 **根據品質篩選序列**
 
 把混在raw reads中的低品質的雜訊移除。
+
 nanofilt的程式碼是來自 https://github.com/wdecoster/nanofilt
+
 qualityfilt的是由本專案設計，其單純利用每序列的平均品質分數、長度進行篩選
+
 ```mermaid
 flowchart LR
     all.fastq-->|nanofilt/qualityfilt| all_nanofilt.fastq/all_qualityfilt.fastq
