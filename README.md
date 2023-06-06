@@ -25,8 +25,6 @@
 ---
 ### combine_fastq
 **解壓縮及合併所有fastq.gz檔案。**
-
- 大部分basecalling軟體會產生許多fastq.gz檔案，本功能可以將所有fastq.gz檔案合併成一個fastq檔案。
 ```mermaid
 flowchart LR
     1.fastq.gz-->|Uncompress| all.fastq
@@ -34,12 +32,15 @@ flowchart LR
     3.fastq.gz-->|Uncompress| all.fastq
     ...... -->|Uncompress| all.fastq
 ```
- 
+<details>
+ 大部分basecalling軟體會產生許多fastq.gz檔案，本功能可以將所有fastq.gz檔案合併成一個fastq檔案。<br>
+
 	all_fastq = dumb.combine_fastq(
 					src = "./bonito", 
 					des = "./des/", 
 					name = "all.fastq" 
 				)
+</details>
     
 ---
 ### nanofilt
