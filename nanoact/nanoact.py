@@ -1436,14 +1436,19 @@ class NanoAct():
                 seqs = self._fasta_reader(handle)
             if input_format == 'fastq':
                 seqs = self._fastq_reader(handle)
-        if output_format == 'fasta' or output_format == 'both':
-            fasta_handle = open(des + ".fas", 'w')
-        if output_format == 'fastq' or output_format == 'both':
-            fastq_handle = open(des + ".fastq", 'w')
-        for seq in seqs:
-            if random() < ratio:
-                if output_format == 'fasta' or output_format == 'both':
-                    fasta_handle.write(f">{seq['title']}\n{seq['seq']}\n")
-                if output_format == 'fastq' or output_format == 'both':
-                    fastq_handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
+            if output_format == 'fasta' or output_format == 'both':
+                fasta_handle = open(des + ".fas", 'w')
+            if output_format == 'fastq' or output_format == 'both':
+                fastq_handle = open(des + ".fastq", 'w')
+            for seq in seqs:
+                if random() < ratio:
+                    if output_format == 'fasta' or output_format == 'both':
+                        fasta_handle.write(f">{seq['title']}\n{seq['seq']}\n")
+                    if output_format == 'fastq' or output_format == 'both':
+                        fastq_handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
+            #close file handles
+            if output_format == 'fasta' or output_format == 'both':
+                fasta_handle.close()
+            if output_format == 'fastq' or output_format == 'both':
+                fastq_handle.close()
                     
