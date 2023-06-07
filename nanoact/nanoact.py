@@ -1429,17 +1429,17 @@ class NanoAct():
         if input_format == 'fasta' and output_format in ['fastq', 'both']:
             raise ValueError("fasta file does not contain quality scores, so it cannot be converted to fastq")
         
-    def random_sampler(self, input, output, input_format='fasta', output_format='fasta', ratio=0.2):
+    def random_sampler(self, src, des, input_format='fasta', output_format='fasta', ratio=0.2):
         self._check_input_ouput(input_format, output_format)
-        with open(input, 'r') as handle:
+        with open(src, 'r') as handle:
             if input_format == 'fasta':
                 seqs = self._fasta_reader(handle)
             if input_format == 'fastq':
                 seqs = self._fastq_reader(handle)
         if output_format == 'fasta' or output_format == 'both':
-            fasta_handle = open(output + ".fas", 'w')
+            fasta_handle = open(des + ".fas", 'w')
         if output_format == 'fastq' or output_format == 'both':
-            fastq_handle = open(output + ".fastq", 'w')
+            fastq_handle = open(des + ".fastq", 'w')
         for seq in seqs:
             if random() < ratio:
                 if output_format == 'fasta' or output_format == 'both':
