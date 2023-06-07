@@ -1446,3 +1446,4 @@ class NanoAct():
                     fasta_handle.write(f">{seq['title']}\n{seq['seq']}\n")
                 if output_format == 'fastq' or output_format == 'both':
                     fastq_handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
+                    
