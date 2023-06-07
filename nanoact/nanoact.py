@@ -16,11 +16,14 @@ import os
 from collections import Counter
 import urllib.parse
 import time
+from random import random
 
 # %%
 class NanoAct():
     def __init__(self, TEMP = './temp/'):
         self.TEMP = TEMP
+        self.fasta_ext = ['.fasta','.fa','.fas']
+        self.fastq_ext = ['.fastq']
     def _lib_path(self):
         #get the path of the library
         return os.path.dirname(os.path.realpath(__file__))
@@ -88,7 +91,7 @@ class NanoAct():
                     break
         return max_alignment,max_score
     """
-    def _fastq_reader(self, handle):
+    def _fastq_reader(self, handle, suppress_warning=True):
         #Custom fastq reader, which can handle the case when the quality score is inconsistent with the sequence length
         while True:           
             line = handle.readline()
@@ -101,9 +104,11 @@ class NanoAct():
             handle.readline() # skip the line starting with "+"
             qual = handle.readline().rstrip()
             if len(qual) != len(seq):
-                print("Inconsistency found", title)
+                if not suppress_warning:
+                    print("Inconsistency found", title)
                 #Temporary workaround (return fake qual)
-                yield {"title": title, "seq": seq, "qual": "A"*len(seq)}
+                diff = len(seq) - len(qual)
+                yield {"title": title, "seq": seq, "qual": qual + "#"*diff}
                 pass
             else:
                 yield {"title": title, "seq": seq, "qual": qual}
@@ -146,25 +151,13 @@ class NanoAct():
         #This is a wrapper for edlib.align
         return edlib.align(str(s1).upper(), str(s2).upper())['editDistance']/(min(len(s1), len(s2))+0.1)*100
     def _reverse_complement(self, s):
-        s = list(s)
-        for pos, nuc in enumerate(s):
-            if nuc == 'A':
-                s[pos] = 'T'
-            elif nuc == 'T':
-                s[pos] = 'A'
-            elif nuc == 'C':
-                s[pos] = 'G'
-            elif nuc == 'G':
-                s[pos] = 'C'
-            elif nuc == 'a':
-                s[pos] = 't'
-            elif nuc == 't':
-                s[pos] = 'a'
-            elif nuc == 'c':
-                s[pos] = 'g'
-            elif nuc == 'g':
-                s[pos] = 'c'
-        return ''.join(s[::-1])
+        complement = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C', 
+                      'a': 't', 't': 'a', 'c': 'g', 'g': 'c', 
+                      'Y': 'R', 'R': 'Y', 'S': 'S', 'W': 'W', 
+                      'y': 'r', 'r': 'y', 's': 's', 'w': 'w',
+                      'K': 'M', 'M': 'K', 'B': 'V','N' : 'N',
+                      'k': 'm', 'm': 'k', 'b': 'v','n' : 'n'}
+        return ''.join([complement.get(base, base) for base in s[::-1]])
     def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n" ):
         program = "blastn&MEGABLAST=on"
         database = "nt"
@@ -360,35 +353,72 @@ class NanoAct():
         #./mafft.bat --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
         cmd = f"{mafft_bin} {src} > {des}"
         self._exec(cmd,suppress_output=True)
-    def orientation(self, src, des, tsv,search_region=200):
+    def orientation(self, src, des, 
+                    input_format = "fastq",
+                    output_format = "both",
+                    BARCODE_INDEX_FILE = "",
+                    FwPrimer = "FwPrimer",
+                    RvPrimer = "RvPrimer",
+                    search_region=200):
         #Input: a folder containing all the fas files, fas_file should be named as {sample_id}.fas
         #Input2: a barcode index file, containing following columns: SampleID, FwPrimer, RvPrimer
+        #input_format: fastq or fasta or both
         #Search_region: number of bases in the beginning of raw read to search for primer
         #Output: a folder containing sequences with the right orientation
+        self._check_input_ouput(input_format, output_format)
         try:
             os.makedirs(des, exist_ok=True)
         except:
             pass
-        bar_idx = pd.read_csv(tsv, sep='\t')
+        #Read barcode index file as tsv or csv depending on the file extension
+        if BARCODE_INDEX_FILE.endswith(".tsv"):
+            bar_idx = pd.read_csv(BARCODE_INDEX_FILE, sep='\t')
+        else:
+            bar_idx = pd.read_csv(BARCODE_INDEX_FILE)
         #Read fasta file
         for f in os.scandir(src):
-            if f.is_file() and f.name.endswith(".fas"):
-                sample_id = f.name[:-4]
-                try:
-                    F = bar_idx[bar_idx['SampleID'].astype(str)==sample_id]['FwPrimer'].values[0]
-                    R = bar_idx[bar_idx['SampleID'].astype(str)==sample_id]['RvPrimer'].values[0]
-                except IndexError:
-                    print(f"Sample {sample_id} not found in the barcode file, skipping")
+            if f.is_file() and (f.name.endswith(".fas") or f.name.endswith(".fastq")):
+                if input_format == "both":
+                    pass
+                elif input_format == "fastq" and f.name.endswith(".fas"):
                     continue
+                elif input_format == "fasta" and f.name.endswith(".fastq"):
+                    continue
+                #Get filename without extension
+                filename = os.path.splitext(f.name)[0]
+                print(f.name, "processing")
+                
+                try:
+                    F = bar_idx[bar_idx['SampleID'].astype(str)==filename][FwPrimer].values[0]
+                    R = bar_idx[bar_idx['SampleID'].astype(str)==filename][RvPrimer].values[0]
+                except IndexError:
+                    print(f"Sample {filename} not found in the barcode file, skipping")
+                    continue
+
+
+                #Initialize output file
+                if output_format == "both" or output_format == "fasta":
+                    output_fasta = open(f"{des}/{filename}.fas", "w")
+                if output_format == "both" or output_format == "fastq":
+                    output_fastq = open(f"{des}/{filename}.fastq", "w")
+
                 with open(f.path) as handle:
                     with open(f"{des}/{f.name}", "w") as output:
-                        for record in self._fasta_reader(handle):
+                        if f.name.endswith(".fas"):
+                            records = self._fasta_reader(handle)
+                        elif f.name.endswith(".fastq"):
+                            records = self._fastq_reader(handle)
+                        for record in records: 
                             #Check if the sequence is in the right orientation
                             aln_f = edlib.align(F.upper(), record['seq'].upper()[:search_region], mode="HW", task="locations")
                             aln_r = edlib.align(R.upper(), record['seq'].upper()[:search_region], mode="HW", task="locations")
                             if aln_f['editDistance'] > aln_r['editDistance']:
                                 record['seq'] = self._reverse_complement(record['seq'])
-                            output.write(f">{record['title']}\n{record['seq']}\n")
+                            #output.write(f">{record['title']}\n{record['seq']}\n")
+                            if output_format == "both" or output_format == "fasta":
+                                output_fasta.write(f">{record['title']}\n{record['seq']}\n")
+                            if output_format == "both" or output_format == "fastq":
+                                output_fastq.write(f"@{record['title']}\n{record['seq']}\n+\n{record['qual']}\n")
         return des
     def mafft_consensus (self, src, des):
         try:
@@ -418,15 +448,15 @@ class NanoAct():
  
 
 
-    def _get_sample_id_single (self, seq, barcode_hash_table, check_segment_length=150, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
+    def _get_sample_id_single (self, seq, barcode_hash_table, search_range=150, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
         ids = []
         integrity = []
         seqs = []
         # Convert the input sequence read to uppercase and extract the beginning and end segments
         seq = seq.upper()
-        seqF = seq[:check_segment_length]
-        seqR = seq[-check_segment_length:]
+        seqF = seq[:search_range]
+        seqR = seq[-search_range:]
         
         for id in barcode_hash_table:
             # Iterate through the hash table of barcodes and their corresponding index sequences
@@ -448,11 +478,26 @@ class NanoAct():
                 else:
                     ids.append(id)
                     integrity.append(False)
-                seqs.append(seqF +seq[check_segment_length:-check_segment_length] + seqR)
+                seqs.append(seqF +seq[search_range:-search_range] + seqR)
         # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
         return ids, integrity, seqs
-    def singlebar(self, src, des, BARCODE_INDEX_FILE, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, expected_length_variation = 0.3, check_segment_length=150):
+    def singlebar(self, src, des, 
+                  BARCODE_INDEX_FILE,
+                    mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, 
+                    expected_length_variation = 0.3, 
+                    search_range=150,
+                    output_format="both"
+                    ):
         """
+        Input: 單個fastq檔案，例如 all.fastq
+        Output: 一個資料夾，程式會在該資料夾中輸出以SampleID為檔名的fastq檔案或是fasta檔案（由output_format決定），例如 SampleID.fastq
+        BARCODE_INDEX_FILE: barcode資料庫，可以是csv或是tsv檔案，例如 barcode.csv。必須包含SampleID, FwIndex, RvAnchor，ExpectedLength四個欄位。
+        mismatch_ratio_f: FwIndex容許的錯誤率，預設為0.15。例如barcode長度為20bp，則容許0.15*20=3bp的錯誤(edit distance)。
+        mismatch_ratio_r: RvAnchor容許的錯誤率，預設為0.15。
+        expected_length_variation: 預期的read長度變異，預設為0.3。例如預期的read長度為300bp，則容許0.3*300=90bp的變異。
+        search_range: 搜尋barcode的範圍，預設為150bp。代表搜尋範圍為前150bp和後150bp。
+        output_format: 輸出檔案的格式，預設為both。可以是fastq或是fasta。both代表同時輸出fastq和fasta。
+
         1.Process the raw sequencing file using a fastq_reader function which reads in four lines at a time representing one sequencing read.
         2.For each read, call the _get_sample_id_single function to identify its corresponding sample ID and barcode integrity.
         3.If a sample ID is identified, append the read to the corresponding sample's output file.
@@ -461,6 +506,9 @@ class NanoAct():
         6.If no barcode is identified, append it to the "UNKNOWN" dictionary.
         7.Finally, output the demultiplexed reads into different output files based on their barcode.
         """
+        #Check output_format, only accept "fastq" or "fasta" or "both"
+        if output_format not in ["fastq", "fasta", "both"]:
+            raise ValueError("output_format must be either fastq, fasta or both")
         # Define the main function for demultiplexing
         if BARCODE_INDEX_FILE.endswith("tsv"):
             sep = "\t"
@@ -493,7 +541,7 @@ class NanoAct():
         # Initialize dictionaries for output files for each sample and additional dictionaries for reads with unknown, multiple, or truncated barcodes
         with open(src, "r") as handle:
             for record in self._fastq_reader(handle):
-                ids, integrity, seqs= self._get_sample_id_single(record["seq"], barcode_hash_table, check_segment_length, mismatch_ratio_f, mismatch_ratio_r)
+                ids, integrity, seqs= self._get_sample_id_single(record["seq"], barcode_hash_table, search_range, mismatch_ratio_f, mismatch_ratio_r)
                 if len(ids) == 1:
                     #if only one barcode is identified, append the read to the corresponding sample's output file
                     record["seq"] = seqs[0]
@@ -525,21 +573,22 @@ class NanoAct():
                 path = f"{des}/trash/{bin}"
             else:
                 path = f"{des}/{bin}"
-            #Save to separate fastq file
-            with open(path+".fastq", "w") as handle:
-                for record in pool[bin]:
-                    handle.write(record["title"] + "\n")
-                    handle.write(record["seq"] + "\n")
-                    handle.write("+" + "\n")
-                    handle.write(record["qual"] + "\n")
-            #Save to separate fasta file
-            with open(path+".fas", "w") as handle:
-                for record in pool[bin]:
-                    handle.write(">"+ record["title"] + "\n")
-                    handle.write(record["seq"] + "\n")
+            #Save to separate fastq or fasta file based on output_format
+            if output_format == "fastq" or output_format == "both":
+                with open(path+".fastq", "w") as handle:
+                    for record in pool[bin]:
+                        handle.write("@"+record["title"] + "\n")
+                        handle.write(record["seq"] + "\n")
+                        handle.write("+" + "\n")
+                        handle.write(record["qual"] + "\n")
+            if output_format == "fasta" or output_format == "both":
+                with open(path+".fas", "w") as handle:
+                    for record in pool[bin]:
+                        handle.write(">"+ record["title"] + "\n")
+                        handle.write(record["seq"] + "\n")
         stat_df.to_csv(f"{des}/2_Singlebar_stat.csv", index=False)
         #Print out the number of reads discarded due to unknown, multiple, or truncated barcodes
-        FAILED_NUM = len(pool['UNKNOWN']) + len(pool['MULTIPLE']) + len(pool['TRUNCATED'])
+        FAILED_NUM = len(pool['UNKNOWN']) + len(pool['MULTIPLE']) + len(pool['TRUNCATED']) + len(pool['IncorrectLength'])
         print (f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
         return des
     def _get_sample_id_dual (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15, mismatch_ratio_r = 0.15):
@@ -692,7 +741,7 @@ class NanoAct():
                         for line in infile:
                             outfile.write(line)
         return f'{des}/{name}'.format(self.TEMP)
-    def nanoflit(self, src, des, name = "all.fastq", NANOFILT_QSCORE = 8,  NANOFILT_MIN_LEN = 400, NANOFILT_MAX_LEN = 8000):
+    def nanofilt(self, src, des, name = "all.fastq", NANOFILT_QSCORE = 8,  NANOFILT_MIN_LEN = 400, NANOFILT_MAX_LEN = 8000):
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
@@ -758,16 +807,21 @@ class NanoAct():
         out, err = self._exec(f"minibar.py -F -C -e {MINIBAR_INDEX_DIS} {BARCODE_INDEX_FILE} {src} 2>&1")
         os.chdir(cwd)
         return des
+    def _fastq_to_fasta(self, src, des):
+        #Convert a fastq file to fasta
+        with open(src, 'r') as infile:
+            with open(des, 'w') as outfile:
+                for s in self._fastq_reader(infile, suppress_warning=True):
+                    outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
+        return des
     def batch_to_fasta(self, src, des):
         #Convert all fastq files in a folder to fasta
         print("Start converting fastq to fasta...")
         for f in os.scandir(src):
             if f.name.endswith(".fastq"):
                 print("Converting {}".format(f.name))
-                with open(f"{src}/{f.name}", 'r') as infile:
-                    with open(f"{des}/{f.name[:-2]}",'w') as outfile:
-                        for s in self._fastq_reader(infile):
-                            outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
+                SampleID, ext = os.path.splitext(f.name)
+                self._fastq_to_fasta(f.path, f"{des}/{SampleID}.fasta")
         return des
     def distance_matrix(self, handle, TRUNCATE_HEAD_TAIL = True):
         raw = list(self._fasta_reader(handle))
@@ -788,17 +842,22 @@ class NanoAct():
                 dm[i][j] = d
                 dm[j][i] = dm[i][j]
         return dm
-    def hdbscan(self, dm, min_cluster_size = 6, min_samples = 1):
+    def _hdbscan(self, dm, min_cluster_size = 6, min_samples = 1):
         #HDBSCAN clustering
         clusterer = hdbscan.HDBSCAN(min_cluster_size = min_cluster_size, min_samples = min_samples)
         clusterer.fit(dm)
         return clusterer.labels_
-    def clusters_fastas(self, src, des, min_cluster_size = 0.3, mds = True):
+    def hdbscan(self, 
+                src, des, 
+                input_format = "fasta",
+                output_format = "both",
+                min_cluster_size = 0.3, mds = True):
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             print(e)
             pass
+        self._check_input_ouput(input_format=input_format, output_format=output_format)
         for f in os.scandir(src):
             if f.name.endswith(".fas"):
                 clustered_seq = {}
@@ -806,10 +865,12 @@ class NanoAct():
                 #Read, calculate distance matrix, cluster
                 with open(f.path, 'r') as infile:
                     dm = self.distance_matrix(infile)
+                    #cluster size is relative to the number of sequences
+                    #if the number of sequences is small, use absolute cluster size (2)
                     abs_cluster_size = max(2,int(dm.shape[0]*min_cluster_size))
                     print("abs_cluster_size: ", abs_cluster_size)
                     try:
-                        labels = self.hdbscan(dm, abs_cluster_size) #Use relative_cluster_size
+                        labels = self._hdbscan(dm, abs_cluster_size) #Use relative_cluster_size
                         #print(f.name, labels)
                     except Exception as e:
                         print(e)
@@ -848,7 +909,7 @@ class NanoAct():
                 self._exec(f'lamassemble /content/lamassemble/train/promethion.mat -a {f.path} > {des}/aln_{f.name}')
                 self._exec(f'lamassemble /content/lamassemble/train/promethion.mat -c -n {f.name[:-4]} {des}/aln_{f.name} > {des}/con_{f.name}')
         return des              
-    def deHead (self, src, des, start_offset = 0 , end_offset = 0):
+    def _trim_by_case (self, src, des, fw_offset = 0, rv_offset = 0, input_format="fastq", output_format = "both"):
         #Note: this function can only be applied to fasta files generated by singlebar which labels reads as follows:
         #Head regions are labeled by minibar as HEAD(uppercase)+barcode(lowercase)+SEQ WE NEED(uppercase)+barcode(lowercase)+TAIL(uppercase)
         #Start_offset, end_offset:  adjust the position of cut off point
@@ -857,46 +918,64 @@ class NanoAct():
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             print(e)
+        counter= 0
+        #Check input and output format
+        self._check_input_ouput(input_format, output_format)
+
         for f in os.scandir(src):
-            if f.name.endswith(".fas"):   
-                with open (f.path, 'r') as infile:
-                    with open (f"{des}/{f.name}", 'w') as outfile:
-                        for s in self._fasta_reader(infile):
-                            try:
-                                #Head regions are labeled by minibar as HEAD(uppercase)+barcode(lowercase)+SEQ WE NEED(uppercase)+barcode(lowercase)+TAIL(uppercase) 
-                                r = re.search("([A-Z]+)([a-z]+)([A-Z]+)([a-z]+)([A-Z]+)", s['seq'])
-                                s['seq'] = s['seq'][r.start(3)+start_offset:r.end(3)-end_offset]
-                                outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
-                            except Exception as e:
-                                pass
-                                #print("Labeled HEAD not found in ", s['title'])
+            SampleID, ext = os.path.splitext(os.path.basename(f.name))
+            
+            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
+                pass
+            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+                pass
+            else:
+                continue
+            print("Trimming {}".format(SampleID))
+            with open (f.path, 'r') as infile:
+                if ext in self.fastq_ext:
+                    seq_iter = self._fastq_reader(infile)
+                elif ext in self.fasta_ext:
+                    seq_iter = self._fasta_reader(infile)
+                else:
+                    continue
+                if output_format in  ["fasta", "both"]:
+                    outfile_fasta = open(f"{des}/{SampleID}.fas", 'w')
+                if output_format in  ["fastq", "both"]:
+                    outfile_fastq = open(f"{des}/{SampleID}.fastq", 'w')
+                for s in seq_iter:
+                    try:
+                        #Head regions are labeled by minibar as HEAD(uppercase)+barcode(lowercase)+SEQ WE NEED(uppercase)+barcode(lowercase)+TAIL(uppercase) 
+                        r = re.search("([A-Z]+)([a-z]+)([A-Z]+)([a-z]+)([A-Z]+)", s['seq'])
+                        s['seq'] = s['seq'][r.start(3)+fw_offset:r.end(3)-rv_offset]
+                        if output_format in  ["fasta", "both"]:
+                            outfile_fasta.write(">{}\n{}\n".format(s['title'],s['seq']))
+                        if output_format in  ["fastq", "both"]:
+                            outfile_fastq.write("@{}\n{}\n+\n{}\n".format(s['title'],s['seq'],s['qual']))
+                        counter += 1
+                        #print(counter,"reads processed", end = "\r")
+                    except Exception as e:
+                        pass
+                        #print("Labeled HEAD not found in ", s['title'])
+                        
         return des
 
-    def trim_reads (self, src, des,  
+    def _trim_by_seq (self, src, des,  
                     BARCODE_INDEX_FILE,fw_col = "FwPrimer",rv_col = "RvPrimer",
+                    input_format="fastq", output_format = "both",
                     fw_offset = 0, rv_offset = 0,
                     mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15,
-                    discard_no_match = True,
+                    discard_no_match = False,
                     check_both_directions = True,
                     reverse_complement_rv = True,
                     ):
-        # This function removes primers from fasta files based on the provided barcode index file.
-        # src: folder containing fasta files
-        # des: folder to save the output fasta files
-        # BARCODE_INDEX_FILE: tsv or csv file containing SampleID, FwPrimer, and RvPrimer columns
-        # fw_col: column name for the forward primer sequence in the barcode index file
-        # rv_col: column name for the reverse primer sequence in the barcode index file
-        # mismatch_ratio_f: maximum allowed mismatch ratio for the forward primer sequence
-        # mismatch_ratio_r: maximum allowed mismatch ratio for the reverse primer sequence
-        # fw_offset: offset for the forward primer sequence
-        # rv_offset: offset for the reverse primer sequence
-        # discard_no_match: whether to discard sequences that do not match the primers
-        # check_both_directions: whether to check both forward and reverse complement sequences, if primers are found in the reverse complement sequence, the output sequence will be reverse complemented
-        # reverse_complement_rv: whether to reverse complement the reverse primer sequence
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             print(e)
+        #Check input and output format
+        self._check_input_ouput(input_format, output_format)
+
         try:
             if BARCODE_INDEX_FILE.endswith(".tsv"):
                 df = pd.read_csv(BARCODE_INDEX_FILE, sep="\t")
@@ -911,60 +990,124 @@ class NanoAct():
             df = df.astype(str)
         except Exception as e:
             print(e)
+
+
         for f in os.scandir(src):
-            if f.name.endswith(".fas"):   
-                SampleID = f.name.replace(".fas","")
-                print("Processing", SampleID)
-                try:
-                    fw_trim = df.loc[df['SampleID'] == SampleID][fw_col].values[0]
-                    rv_trim = df.loc[df['SampleID'] == SampleID][rv_col].values[0]
-                    #Upper case
-                    fw_trim = fw_trim.upper()
-                    rv_trim = rv_trim.upper()
-                    if reverse_complement_rv:
-                        rv_trim = self._reverse_complement(rv_trim)
-                except Exception as e:
-                    print(e)
-                    print("SampleID not found in BARCODE_INDEX_FILE")
+            SampleID, ext = os.path.splitext(os.path.basename(f.name))
+            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
+                pass
+            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+                pass
+            else:
+                continue
+            
+            print("Processing", SampleID)
+            try:
+                fw_trim = df.loc[df['SampleID'] == SampleID][fw_col].values[0]
+                rv_trim = df.loc[df['SampleID'] == SampleID][rv_col].values[0]
+                #Upper case
+                fw_trim = fw_trim.upper()
+                rv_trim = rv_trim.upper()
+                if reverse_complement_rv:
+                    rv_trim = self._reverse_complement(rv_trim)
+            except Exception as e:
+                print(e)
+                print("SampleID not found in BARCODE_INDEX_FILE")
+                continue
+            
+            with open(f.path, 'r') as infile:
+                if ext in self.fastq_ext:
+                    seq_iter = self._fastq_reader(infile)
+                elif ext in self.fasta_ext:
+                    seq_iter = self._fasta_reader(infile)
+                else:
                     continue
-                with open (f.path, 'r') as infile:
-                    with open (f"{des}/{f.name}", 'w') as outfile:
-                        #Record trimmed, no-match, and total reads
-                        trimmed_F = 0
-                        trimmed_R = 0
-                        total = 0
-                        for s in self._fasta_reader(infile):
-                            total += 1
+                if output_format in  ["fasta", "both"]:
+                    outfile_fasta = open(f"{des}/{SampleID}.fas", 'w')
+                if output_format in  ["fastq", "both"]:
+                    outfile_fastq = open(f"{des}/{SampleID}.fastq", 'w')
+ 
+                #Record trimmed, no-match, and total reads
+                trimmed_F = 0
+                trimmed_R = 0
+                total = 0
+                for s in seq_iter:
+                    total += 1
+                    seq_upper = s['seq'].upper()
+                    #Trim fw_trim from the beginning of the sequence first, then trim rv_trim from the end of the sequence
+                    #And if none of fw_trim and rv_trim is found and check_both_directions is True, check the reverse complement sequence
+                    #If fw_trim and rv_trim are still not found, discard the sequence if discard_no_match is True
+                    fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
+                    if (fw['locations'] != []):
+                        trimmed_F += 1
+                        s['seq'] = s['seq'][fw['locations'][0][1]+1+fw_offset:]
+                        seq_upper = s['seq'].upper()
+                    rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
+                    if (rv['locations'] != []):
+                        trimmed_R += 1
+                        s['seq'] = s['seq'][:rv['locations'][0][0]-rv_offset]
+                    #If fw_trim and rv_trim are not found, check the reverse complement sequence
+                    if (fw['locations'] == []) and (rv['locations'] == []) and check_both_directions:
+                        s['seq'] = self._reverse_complement(s['seq'])
+                        seq_upper = s['seq'].upper()
+                        fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
+                        if (fw['locations'] != []):
+                            trimmed_F += 1
+                            s['seq'] = s['seq'][fw['locations'][0][1]+1+fw_offset:]
                             seq_upper = s['seq'].upper()
-                            #Trim fw_trim from the beginning of the sequence first, then trim rv_trim from the end of the sequence
-                            #And if none of fw_trim and rv_trim is found and check_both_directions is True, check the reverse complement sequence
-                            #If fw_trim and rv_trim are still not found, discard the sequence if discard_no_match is True
-                            fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
-                            if (fw['locations'] != []):
-                                trimmed_F += 1
-                                seq_upper = seq_upper[fw['locations'][0][1]+fw_offset:]
-                            rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
-                            if (rv['locations'] != []):
-                                trimmed_R += 1
-                                seq_upper = seq_upper[:rv['locations'][0][0]-rv_offset]
-                            if (fw['locations'] == []) and (rv['locations'] == []) and check_both_directions:
-                                seq_upper = self._reverse_complement(seq_upper)
-                                fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
-                                if (fw['locations'] != []):
-                                    trimmed_F += 1
-                                    seq_upper = seq_upper[fw['locations'][0][1]+fw_offset:]
-                                rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
-                                if (rv['locations'] != []):
-                                    trimmed_R += 1
-                                    seq_upper = seq_upper[:rv['locations'][0][0]-rv_offset]
-                                if (fw['locations'] == []) and (rv['locations'] == []) and discard_no_match:
-                                    continue
-                                #turn the sequence back to the original direction
-                                seq_upper = self._reverse_complement(seq_upper)
-                            outfile.write(f">{s['title']}\n{seq_upper}\n")
-                        print(f"Total reads: {total}, trimmed forward: {trimmed_F}, trimmed reverse: {trimmed_R}")
+                        rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
+                        if (rv['locations'] != []):
+                            trimmed_R += 1
+                            s['seq'] = s['seq'][:rv['locations'][0][0]-rv_offset]
+                        #If fw_trim and rv_trim are still not found, discard the sequence if discard_no_match is True
+                        if (fw['locations'] == []) and (rv['locations'] == []) and discard_no_match:
+                            continue
+                        #turn the sequence back to the original direction
+                        s['seq'] = self._reverse_complement(s['seq'])
+                    if output_format in  ["fasta", "both"]:
+                        outfile_fasta.write(f">{s['title']}\n{s['seq']}\n")
+                    if output_format in  ["fastq", "both"]:
+                        outfile_fastq.write(f"@{s['title']}\n{s['seq']}\n+\n{s['qual']}\n") 
+            print(f"Total reads: {total}, trimmed forward: {trimmed_F}, trimmed reverse: {trimmed_R}")
         return des
 
+    def trim_reads(self, 
+                   src, des,
+                   mode="case",
+                   input_format="fastq",
+                    output_format="both",
+                    BARCODE_INDEX_FILE = "",
+                    fw_col = "FwPrimer",rv_col = "RvPrimer",
+                    fw_offset = 0, rv_offset = 0,
+                    mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15,
+                    discard_no_match = False,
+                    check_both_directions = True,
+                    reverse_complement_rv = True,
+                     ):
+        #mode should either be "table" or "case"
+        #if mode is "table", BARCODE_INDEX_FILE should be a tsv or csv file with columns SampleID, fw_col, rv_col
+        #if mode is "case", BARCODE_INDEX_FILE wouldn't be used, fw_col and rv_col will also be ignored
+        self._check_input_ouput(input_format=input_format, output_format=output_format)
+        if mode == "table":
+            self._trim_by_seq(src=src,des=des, 
+                              BARCODE_INDEX_FILE=BARCODE_INDEX_FILE,
+                              fw_col=fw_col, rv_col=rv_col,
+                              fw_offset=fw_offset, rv_offset=rv_offset, 
+                              mismatch_ratio_f=mismatch_ratio_f, mismatch_ratio_r=mismatch_ratio_r, 
+                              discard_no_match=discard_no_match, 
+                              check_both_directions=check_both_directions, 
+                              reverse_complement_rv=reverse_complement_rv,
+                               input_format=input_format,
+                               output_format=output_format,
+                              )
+        elif mode == "case":
+            print("Notice: mode is set to 'case', arguments other than src, des, fw_offset, rv_offset,input_format, output_format will be ignored")
+            self._trim_by_case(src=src, 
+                               des=des, 
+                               fw_offset=fw_offset,
+                               rv_offset=rv_offset,
+                               input_format=input_format, 
+                               output_format=output_format)
     """
     def medaka (self, src, des, startswith="con_"):
         for f in os.scandir(src):
@@ -1034,107 +1177,172 @@ class NanoAct():
         #pd.DataFrame(pool)[['name','cluster','reads', 'organism','taxa','seq', 'BLAST_simil','BLAST_acc','BLAST_seq', 'funguild', 'funguild_notes']].to_csv(f"{des}/blast.csv", index=False)
         pd.DataFrame(pool).to_csv(f"{des}/{name}", index=False)
         return f"{des}/{name}"
-    def mmseqs_cluster(self, src, des, mmseqs="/nanoact/bin/mmseqs", min_seq_id=0.5, cov_mode=0, k=14, threads=8, s=7.5, cluster_mode=0, min_read_num = 0):
+    def mmseqs_cluster(self, 
+                       src, des, 
+                       mmseqs="/nanoact/bin/mmseqs", 
+                       input_format = "fasta",
+                       output_format = "both",
+                       min_seq_id=0.5, cov_mode=0, k=14, 
+                       threads=8, s=7.5, 
+                       cluster_mode=0, min_read_num = 0,
+                       kmer_per_seq = 20,
+                       suppress_out=True):
+        if cluster_mode not in [0,1,2,'linclust']:
+            raise ValueError("cluster_mode must be one of 0,1,2,'linclust'")
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         mmseqs = f"{lib}/bin/mmseqs"
+        self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des)
         except:
             pass
         abs_des = os.path.abspath(des)
         for f in os.scandir(src):
-            if f.is_file() and f.name.endswith(".fas"):
-                print("Clustering", f.name)
-                sample = f.name.split(".fas")[0]
-                #clean up temp folder
-                self._clean_temp()
-                #build db
-                #print("Creating db")
-                self._exec(f"{mmseqs} createdb {f.path} {self.TEMP}/db")
-                #cluster
-                #print("Clustering")
-                self._exec(f"{mmseqs} cluster {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/tmp --min-seq-id {min_seq_id} --cov-mode {cov_mode} -k {k} --threads {threads} -s {s} --cluster-mode {cluster_mode}")
-                #export tsv
-                #self._exec(f"{mmseqs} createtsv {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.tsv")
-                #export fasta
-                #print("Parsing result")
-                self._exec(f"{mmseqs} createseqfiledb {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.seq")
-                self._exec(f"{mmseqs} result2flat {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster.seq {self.TEMP}/cluster.fas")
-                try:
-                    with open(f"{self.TEMP}/cluster.fas", 'r') as handle:
-                        bin = {}
-                        cluster_no = -1
-                        for rec in self._fasta_reader(handle):
-                            if rec['seq'] == "":
-                                cluster_no +=1
-                                bin[cluster_no] = []
-                                continue
-                            else:
-                                bin[cluster_no].append(rec)
-                except Exception as e:
-                    print("Error reading output file", e)
+            SampleID, ext = os.path.splitext(os.path.basename(f.name))
+            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
+                pass
+            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+                pass
+            else:
+                continue 
+            #clean up temp folder
+            self._clean_temp()
+            #Convert fastq to fasta before clustering
+            if ext in self.fasta_ext:
+                fas_path = f.path
+            else:
+                fas_path = f"{self.TEMP}/from_fastq.fas"
+                self._fastq_to_fasta(f.path, fas_path)
+            print("Clustering", f.name)
+
+            #build db
+            #print("Creating db")
+            self._exec(f"{mmseqs} createdb {fas_path} {self.TEMP}/db", suppress_output=suppress_out)
+            #cluster
+            #print("Clustering")
+            if  cluster_mode == 'linclust':
+                self._exec(f"{mmseqs} linclust {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/tmp --kmer-per-seq {kmer_per_seq} --min-seq-id {min_seq_id} --cov-mode {cov_mode} --threads {threads}", suppress_output=suppress_out)
+            else:
+                self._exec(f"{mmseqs} cluster {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/tmp --min-seq-id {min_seq_id} --cov-mode {cov_mode} -k {k} --threads {threads} -s {s} --cluster-mode {cluster_mode}", suppress_output=suppress_out)
+            #export tsv
+
+            #self._exec(f"{mmseqs} createtsv {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.tsv")
+            #export fasta
+            #print("Parsing result")
+            self._exec(f"{mmseqs} createseqfiledb {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.seq", suppress_output=suppress_out)
+            self._exec(f"{mmseqs} result2flat {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster.seq {self.TEMP}/cluster.fas", suppress_output=suppress_out)
+            try:
+                with open(f"{self.TEMP}/cluster.fas", 'r') as handle:
+                    #Read original sequences
+                    with open(f.path, 'r') as rawfile:
+                        if ext in self.fasta_ext:
+                            raw_reads = list(self._fasta_reader(rawfile))
+                            raw_reads = {r['title']:{'title':r['title'], 'seq':r['seq']} for r in raw_reads}
+                        elif ext in self.fastq_ext:
+                            raw_reads = list(self._fastq_reader(rawfile))
+                            raw_reads = {r['title']:{'title':r['title'], 'seq':r['seq'], 'qual':r['qual']} for r in raw_reads}
+                    bin = {}
+                    cluster_no = -1
+                    for rec in self._fasta_reader(handle):
+                        if rec['seq'] == "":
+                            cluster_no +=1
+                            bin[cluster_no] = []
+                            continue
+                        else:
+                            #append use raw_reads, because only raw_reads may contain quality score
+                            bin[cluster_no].append(raw_reads[rec['title']])
+            except Exception as e:
+                print("Error reading output file", e)
+                continue
+            #save each cluster to file
+            print(f"Number of clusters", len(bin))
+            for cluster_no in bin:
+                if len(bin[cluster_no]) < min_read_num:
                     continue
-                #save each cluster to file
-                print(f"Number of clusters", len(bin))
-                for cluster_no in bin:
-                    if len(bin[cluster_no]) < min_read_num:
-                        continue
-                    with open(f"{abs_des}/{sample}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
+                if output_format in ['both','fasta']:
+                    with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
                         for rec in bin[cluster_no]:
                             handle.write(f">{rec['title']}\n{rec['seq']}\n")
+                if output_format in ['both','fastq']:
+                    with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fastq", 'w') as handle:
+                        for rec in bin[cluster_no]:
+                            handle.write(f"@{rec['title']}\n{rec['seq']}\n+\n{rec['qual']}\n")
         return des
 
-    def vsearch_OTUs(self, src, des, vsearch="/nanoact/bin/vsearch", id=0.9):
+    def vsearch_OTUs(self, src, des, 
+                     input_format = "fastq",
+                     output_format = "both",
+                     vsearch="/nanoact/bin/vsearch", 
+                     id=0.9):
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         vsearch = f"{lib}/bin/vsearch"
+        self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des)
         except:
             pass
         abs_des = os.path.abspath(des)
         for f in os.scandir(src):
-            if f.is_file() and f.name.endswith(".fas"):
-                print("Clustering", f.name)   
-                sample = f.name.split(".fas")[0]
-                #clean up temp folder
-                self._clean_temp()
-                self._exec(f"{vsearch} --cluster_size {f.path} --id {id} --strand plus --sizein --sizeout --fasta_width 0 --uc {self.TEMP}/all.clustered.uc --relabel OTU_ --centroids {self.TEMP}/all.otus.fasta --otutabout {self.TEMP}/all.otutab.txt --clusters {self.TEMP}/cluster ",
-                           suppress_output=True
-                           )
-                #read cluster uc file
-                try:
-                    uc = pd.read_csv(f"{self.TEMP}/all.clustered.uc", sep="\t", header=None)
-                except:
-                    print("Error reading output file", sample)
-                    continue
-                #Writing each cluster to file
-                uc = uc[uc[0].isin(["S","H"])]
-                uc.sort_values(by=8,ascending=False,inplace=True)
+            SampleID, ext = os.path.splitext(os.path.basename(f.name))
+            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
+                pass
+            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+                pass
+            else:
+                continue 
+            print("Clustering", f.name)   
+            #clean up temp folder
+            self._clean_temp()
+            #Convert fastq to fasta before clustering
+            if ext in self.fasta_ext:
+                fas_path = f.path
+            else:
+                fas_path = f"{self.TEMP}/from_fastq.fas"
+                self._fastq_to_fasta(f.path, fas_path)
+            self._exec(f"{vsearch} --cluster_size {fas_path} --id {id} --strand plus --sizein --sizeout --fasta_width 0 --uc {self.TEMP}/all.clustered.uc --relabel OTU_ --centroids {self.TEMP}/all.otus.fasta --otutabout {self.TEMP}/all.otutab.txt --clusters {self.TEMP}/cluster ",
+                        suppress_output=True
+                        )
+            #read cluster uc file
+            try:
+                uc = pd.read_csv(f"{self.TEMP}/all.clustered.uc", sep="\t", header=None)
+            except:
+                print("Error reading output file", SampleID)
+                continue
+            #Writing each cluster to file
+            uc = uc[uc[0].isin(["S","H"])]
+            uc.sort_values(by=8,ascending=False,inplace=True)
+            if input_format == "fastq":
+                seqs = list(self._fastq_reader(open(f.path,"r")))
+            else:
                 seqs = list(self._fasta_reader(open(f.path,"r")))
-                seqs = sorted(seqs,key=lambda d: d['title'])
-                #export row 8 and row 1 as a list with {key:8 and value:1}
-                seq_name_clust = uc[[8,1]].to_dict(orient="records")
-                #separate each cluster to bin
-                bin = {}
-                for name_clust in seq_name_clust:
-                    for seq in seqs:
-                        if name_clust[8] in seq['title']:
-                            seq_fas = f">{seq['title']}\n{seq['seq']}\n"
-                            try:
-                                bin[name_clust[1]].append(seq_fas)
-                            except KeyError:
-                                bin[name_clust[1]] = [seq_fas]
-                            #remove seq from seqs to speed up next search
-                            seqs.remove(seq)
-                            break
-                for cluster_no in bin:
-                    with open(f"{abs_des}/{sample}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
+            seqs = sorted(seqs,key=lambda d: d['title'])
+            #export row 8 and row 1 as a list with {key:8 and value:1}
+            seq_name_clust = uc[[8,1]].to_dict(orient="records")
+            #separate each cluster to bin
+            bin = {}
+            for name_clust in seq_name_clust:
+                for seq in seqs:
+                    if name_clust[8] in seq['title']:
+                        try:
+                            bin[name_clust[1]].append(seq)
+                        except KeyError:
+                            bin[name_clust[1]] = [seq]
+                        #remove seq from seqs to speed up next search
+                        seqs.remove(seq)
+                        break
+            for cluster_no in bin:
+                if output_format in ['both','fasta']:
+                    with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
                         for seq in bin[cluster_no]:
-                            handle.write(seq)
-                #Copy otu table to destination
-                shutil.copy(f"{self.TEMP}/all.otutab.txt", f"{abs_des}/{sample}_otu_table.txt")
+                            handle.write(f">{seq['title']}\n{seq['seq']}\n")
+                if output_format in ['both','fastq']:
+                    with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fastq", 'w') as handle:
+                        for seq in bin[cluster_no]:
+                            handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
+            #Copy otu table to destination
+            shutil.copy(f"{self.TEMP}/all.otutab.txt", f"{abs_des}/{SampleID}_otu_table.txt")
 
     def cd_hit_est(self, src, des, cd_hit_est="./nanoact/bin/cd-hit-est", id=0.9, n=10):
         #Get current library file  path
@@ -1213,3 +1421,28 @@ class NanoAct():
         df.fillna(0, inplace=True)
         return df
 
+    def _check_input_ouput(self, input_format, output_format):
+        if input_format not in ['fasta', 'fastq']:
+            raise ValueError("Input format must be either 'fasta' or 'fastq'")
+        if output_format not in ['fasta', 'fastq', 'both']:
+            raise ValueError("Output format must be either 'fasta', 'fastq' or 'both'")
+        if input_format == 'fasta' and output_format in ['fastq', 'both']:
+            raise ValueError("fasta file does not contain quality scores, so it cannot be converted to fastq")
+        
+    def random_sampler(self, input, output, input_format='fasta', output_format='fasta', ratio=0.2):
+        self._check_input_ouput(input_format, output_format)
+        with open(input, 'r') as handle:
+            if input_format == 'fasta':
+                seqs = self._fasta_reader(handle)
+            if input_format == 'fastq':
+                seqs = self._fastq_reader(handle)
+        if output_format == 'fasta' or output_format == 'both':
+            fasta_handle = open(output + ".fas", 'w')
+        if output_format == 'fastq' or output_format == 'both':
+            fastq_handle = open(output + ".fastq", 'w')
+        for seq in seqs:
+            if random() < ratio:
+                if output_format == 'fasta' or output_format == 'both':
+                    fasta_handle.write(f">{seq['title']}\n{seq['seq']}\n")
+                if output_format == 'fastq' or output_format == 'both':
+                    fastq_handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
