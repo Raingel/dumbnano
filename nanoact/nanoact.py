@@ -1440,15 +1440,20 @@ class NanoAct():
                 fasta_handle = open(des + ".fas", 'w')
             if output_format == 'fastq' or output_format == 'both':
                 fastq_handle = open(des + ".fastq", 'w')
+            total = 0
+            sampled = 0
             for seq in seqs:
                 if random() < ratio:
                     if output_format == 'fasta' or output_format == 'both':
                         fasta_handle.write(f">{seq['title']}\n{seq['seq']}\n")
                     if output_format == 'fastq' or output_format == 'both':
                         fastq_handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
+                    sampled += 1
+                total += 1
             #close file handles
             if output_format == 'fasta' or output_format == 'both':
                 fasta_handle.close()
             if output_format == 'fastq' or output_format == 'both':
                 fastq_handle.close()
+            print(f"Total reads: {total}, sampled reads: {sampled}, ratio: {sampled/total}")
                     
