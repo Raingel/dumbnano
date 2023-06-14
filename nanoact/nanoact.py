@@ -275,7 +275,7 @@ class NanoAct():
                     print(e)
                     pass
         return pool
-    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", query_range=(0,-1), batch = 5, timeout=30):
+    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", query_range=(None,None), batch = 5, timeout=30):
         #Collect all sequences
         pool_df = pd.DataFrame() 
         query_seqs=[] 
@@ -287,6 +287,9 @@ class NanoAct():
                         pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
                         #If sequence is too long, preserve only max_query_length in middle
                         q=s['seq'][query_range[0]:query_range[1]]
+                        if len(q) == 0:
+                            print(f"Zero query length. Check your query_range. Skipping {s['title']}")
+                            continue
                         query_seqs.append(f">{s['title']}\n{q}")       
         #set title as index
         pool_df.set_index('title', inplace=True)
