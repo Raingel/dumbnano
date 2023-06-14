@@ -158,7 +158,8 @@ class NanoAct():
                       'K': 'M', 'M': 'K', 'B': 'V','N' : 'N',
                       'k': 'm', 'm': 'k', 'b': 'v','n' : 'n'}
         return ''.join([complement.get(base, base) for base in s[::-1]])
-    def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n" ):
+    def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n"
+                  ,timeout = 30):
         program = "blastn&MEGABLAST=on"
         database = "nt"
         encoded_queries = urllib.parse.quote(seqs)
@@ -179,7 +180,7 @@ class NanoAct():
         print("You can check the status at https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" + rid + "")
         print("And results here: https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID=" + rid + "")
         # poll for results
-        retry = 30
+        retry = timeout * 2
         while True:
             time.sleep(30)
             retry -= 1
@@ -274,7 +275,7 @@ class NanoAct():
                     print(e)
                     pass
         return pool
-    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", max_query_length=500, batch = 5):
+    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", query_range=(0,-1), batch = 5, timeout=30):
         #Collect all sequences
         pool_df = pd.DataFrame() 
         query_seqs=[] 
@@ -284,11 +285,9 @@ class NanoAct():
                     seqs = list(self._fasta_reader(handle))
                     for s in seqs:
                         pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
-                        if len(s['seq']) >= max_query_length:
-                            #If sequence is too long, preserve only max_query_length in middle
-                            diff = len(s['seq']) - max_query_length
-                            s['seq'] = s['seq'][int(diff/2):int(diff/2)+max_query_length]
-                        query_seqs.append(f">{s['title']}\n{s['seq']}")       
+                        #If sequence is too long, preserve only max_query_length in middle
+                        q=s['seq'][query_range[0]:query_range[1]]
+                        query_seqs.append(f">{s['title']}\n{q}")       
         #set title as index
         pool_df.set_index('title', inplace=True)
         for index, row in pool_df.iterrows():
@@ -312,7 +311,7 @@ class NanoAct():
             retry = 3
             while retry >= 0:
                 try:
-                    blast_result = self.NCBIblast(query)
+                    blast_result = self.NCBIblast(query,timeout=timeout)
                     if blast_result != None:
                         blast_result_pool.update(blast_result)
                         break
@@ -823,8 +822,13 @@ class NanoAct():
                 SampleID, ext = os.path.splitext(f.name)
                 self._fastq_to_fasta(f.path, f"{des}/{SampleID}.fasta")
         return des
-    def distance_matrix(self, handle, TRUNCATE_HEAD_TAIL = True):
-        raw = list(self._fasta_reader(handle))
+    def distance_matrix(self, path, TRUNCATE_HEAD_TAIL = True):
+        SampleID, ext = os.path.splitext(os.path.basename(path))
+        with open(path, 'r') as infile:
+            if ext in self.fastq_ext:
+                raw = list(self._fastq_reader(infile))
+            elif ext in self.fasta_ext:
+                raw = list(self._fasta_reader(infile))
         if TRUNCATE_HEAD_TAIL:
             for s in raw:
                 try:
@@ -849,60 +853,67 @@ class NanoAct():
         return clusterer.labels_
     def hdbscan(self, 
                 src, des, 
-                input_format = "fasta",
+                input_format = "fastq",
                 output_format = "both",
                 min_cluster_size = 0.3, mds = True):
+        self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             print(e)
             pass
-        self._check_input_ouput(input_format=input_format, output_format=output_format)
         for f in os.scandir(src):
-            if f.name.endswith(".fas"):
-                clustered_seq = {}
-                print("Clustering {}".format(f.name))
-                #Read, calculate distance matrix, cluster
-                with open(f.path, 'r') as infile:
-                    dm = self.distance_matrix(infile)
-                    #cluster size is relative to the number of sequences
-                    #if the number of sequences is small, use absolute cluster size (2)
-                    abs_cluster_size = max(2,int(dm.shape[0]*min_cluster_size))
-                    print("abs_cluster_size: ", abs_cluster_size)
-                    try:
-                        labels = self._hdbscan(dm, abs_cluster_size) #Use relative_cluster_size
-                        #print(f.name, labels)
-                    except Exception as e:
-                        print(e)
-                        print("Clustering failed")
-                        continue
-                infile.close()
-                #Organize sequences by cluster
-                with open(f.path, 'r') as infile:
-                    seqs = list(self._fasta_reader(infile))
-                for i, l in enumerate(labels):
-                    if l not in clustered_seq:
-                        clustered_seq[l] = []
-                    clustered_seq[l].append(seqs[i])
-                infile.close()
-                print ("Number of clusters:", len(clustered_seq))
-                #Write to file
-                for l in clustered_seq:
-                    with open(f"{des}/{f.name[:-4]}_cluster_{l}_r{len(clustered_seq[l])}.fas", 'w') as outfile:
-                        for s in clustered_seq[l]:
-                            outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
-                #Visualize cluster result with mds
-                if mds:
-                    dm_norm = dm / dm.max()
-                    mds = MDS(n_components=2,random_state=5566, dissimilarity='precomputed', normalized_stress="auto")
-                    mds_results = mds.fit_transform(dm_norm)
-                    fig, ax = plt.subplots(figsize=(15,15))
-                    #ax.scatter(df['PC1'], df['PC2'], c=cluster_labels, cmap='rainbow', s=18)
-                    ax.scatter(mds_results[:,0], mds_results[:,1], c=labels, cmap='rainbow', s=18)  
-                    #Save the plot
-                    plt.savefig(f"{des}/{f.name[:-4]}_MDS.jpg", dpi=56)
-                    #Do not show the plot
-                    plt.close()
+            SampleID, ext = os.path.splitext(os.path.basename(f.name))
+            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
+                pass
+            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+                pass
+            else:
+                continue 
+            clustered_seq = {}
+            print("Clustering {}".format(f.name))
+            #Read, calculate distance matrix, cluster
+            dm = self.distance_matrix(f.path)
+            #cluster size is relative to the number of sequences
+            #if the number of sequences is small, use absolute cluster size (2)
+            abs_cluster_size = max(2,int(dm.shape[0]*min_cluster_size))
+            print("abs_cluster_size: ", abs_cluster_size)
+            try:
+                labels = self._hdbscan(dm, abs_cluster_size) #Use relative_cluster_size
+                #print(f.name, labels)
+            except Exception as e:
+                print(e)
+                print("Clustering failed")
+                continue
+            #Organize sequences by cluster
+            with open(f.path, 'r') as infile:
+                if ext in self.fastq_ext:
+                    seqs = list(self._fastq_reader(infile))
+                elif ext in self.fasta_ext:
+                    seqs = list(self._fasta_reader(infile))            
+            for i, l in enumerate(labels):
+                if l not in clustered_seq:
+                    clustered_seq[l] = []
+                clustered_seq[l].append(seqs[i])
+            infile.close()
+            print ("Number of clusters:", len(clustered_seq))
+            #Write to file
+            for l in clustered_seq:
+                with open(f"{des}/{f.name[:-4]}_cluster_{l}_r{len(clustered_seq[l])}.fas", 'w') as outfile:
+                    for s in clustered_seq[l]:
+                        outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
+            #Visualize cluster result with mds
+            if mds:
+                dm_norm = dm / dm.max()
+                mds = MDS(n_components=2,random_state=5566, dissimilarity='precomputed', normalized_stress="auto")
+                mds_results = mds.fit_transform(dm_norm)
+                fig, ax = plt.subplots(figsize=(15,15))
+                #ax.scatter(df['PC1'], df['PC2'], c=cluster_labels, cmap='rainbow', s=18)
+                ax.scatter(mds_results[:,0], mds_results[:,1], c=labels, cmap='rainbow', s=18)  
+                #Save the plot
+                plt.savefig(f"{des}/{f.name[:-4]}_MDS.jpg", dpi=56)
+                #Do not show the plot
+                plt.close()
     def lamassemble (self, src, des, mat = "/content/lamassemble/train/promethion.mat"):
         for f in os.scandir(src):
             if f.name.endswith(".fas"):
@@ -1180,7 +1191,7 @@ class NanoAct():
     def mmseqs_cluster(self, 
                        src, des, 
                        mmseqs="/nanoact/bin/mmseqs", 
-                       input_format = "fasta",
+                       input_format = "fastq",
                        output_format = "both",
                        min_seq_id=0.5, cov_mode=0, k=14, 
                        threads=8, s=7.5, 
@@ -1344,55 +1355,82 @@ class NanoAct():
             #Copy otu table to destination
             shutil.copy(f"{self.TEMP}/all.otutab.txt", f"{abs_des}/{SampleID}_otu_table.txt")
 
-    def cd_hit_est(self, src, des, cd_hit_est="./nanoact/bin/cd-hit-est", id=0.9, n=10):
+    def cd_hit_est(self, src, des, 
+                   input_format = "fastq",
+                   output_format = "both",                   
+                   cd_hit_est="./nanoact/bin/cd-hit-est", 
+                   id=0.8, n=5):
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         cd_hit_est = f"{lib}/bin/cd-hit-est"
+        self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des)
         except:
             pass
         abs_des = os.path.abspath(des)
         for f in os.scandir(src):
-            if f.is_file() and f.name.endswith(".fas"):
-                print("Clustering", f.name)   
-                sample = f.name.split(".fas")[0]
-                #clean up temp folder
-                self._clean_temp()
-                #-i input file
-                #-o output file
-                #-c sequence identity threshold
-                #-n Suggested word size: 8,9,10 for thresholds 0.90 ~ 1.0 7 for thresholds 0.88 ~ 0.9 6 for thresholds 0.85 ~ 0.88 5 for thresholds 0.80 ~ 0.85 4 for thresholds 0.75 ~ 0.8
-                #-d length of description in .clstr file, default 20
-                self._exec(f"{cd_hit_est} -i {f.path} -o {self.TEMP}/cdhit.fas -c {id} -n {n} -d 0")
-                #Try read clstr file
-                try:
-                    with open(f"{self.TEMP}/cdhit.fas.clstr", 'r') as handle:
-                        bin = {}
-                        for line in handle:
-                            if line.startswith(">Cluster"):
-                                cluster_no = line.split()[1]
-                                bin[cluster_no] = []
-                            else:
-                                title = line.split(">")[1].split("...")[0]
-                                bin[cluster_no].append(title)
-                except:
-                    print("Error reading output file", sample)
-                    continue
+            SampleID, ext = os.path.splitext(os.path.basename(f.name))
+            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
+                pass
+            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+                pass
+            else:
+                continue
+            print("Clustering", f.name)   
+    
+            #clean up temp folder
+            self._clean_temp()
 
-                #Reading original sequence file
-                with open(f.path, 'r') as handle:
-                    seqs = list(self._fasta_reader(handle))
-                #Write each cluster to a file
-                for cluster in bin:
-                    with open(f"{abs_des}/{sample}_cluster_{cluster}_r{len(bin[cluster])}.fas", 'w') as handle:
-                        for seq_title in bin[cluster]:
-                            for read in seqs:
-                                if seq_title in read['title']:
-                                    handle.write(f">{read['title']}\n{read['seq']}\n")
-                                    #remove used read from the list, so that it won't be used again
-                                    seqs.remove(read)
-                                    break
+            #Convert fastq to fasta before clustering
+            if ext in self.fasta_ext:
+                fas_path = f.path
+            else:
+                fas_path = f"{self.TEMP}/from_fastq.fas"
+                self._fastq_to_fasta(f.path, fas_path)
+            #-i input file
+            #-o output file
+            #-c sequence identity threshold
+            #-n Suggested word size: 8,9,10 for thresholds 0.90 ~ 1.0 7 for thresholds 0.88 ~ 0.9 6 for thresholds 0.85 ~ 0.88 5 for thresholds 0.80 ~ 0.85 4 for thresholds 0.75 ~ 0.8
+            #-d length of description in .clstr file, default 20
+            self._exec(f"{cd_hit_est} -i {fas_path} -o {self.TEMP}/cdhit.fas -c {id} -n {n} -d 0")
+            #Try read clstr file
+            try:
+                with open(f"{self.TEMP}/cdhit.fas.clstr", 'r') as handle:
+                    bin = {}
+                    for line in handle:
+                        if line.startswith(">Cluster"):
+                            cluster_no = line.split()[1]
+                            bin[cluster_no] = []
+                        else:
+                            title = line.split(">")[1].split("...")[0]
+                            bin[cluster_no].append(title)
+            except:
+                print("Error reading output file", SampleID)
+                continue
+
+            #Reading original sequence file
+            if input_format == "fastq":
+                seqs = list(self._fastq_reader(open(f.path,"r")))
+            else:
+                seqs = list(self._fasta_reader(open(f.path,"r")))
+            #Write each cluster to a file
+            for cluster in bin:
+                if output_format in ['both','fastq']:
+                    fastq_handle = open(f"{abs_des}/{SampleID}_cluster_{cluster}_r{len(bin[cluster])}.fastq", 'w')
+                if output_format in ['both','fasta']:
+                    fasta_handle = open(f"{abs_des}/{SampleID}_cluster_{cluster}_r{len(bin[cluster])}.fas", 'w')
+                with open(f"{abs_des}/{SampleID}_cluster_{cluster}_r{len(bin[cluster])}.fas", 'w') as handle:
+                    for seq_title in bin[cluster]:
+                        for read in seqs:
+                            if seq_title in read['title']:
+                                if output_format in ['both','fastq']:
+                                    fastq_handle.write(f"@{read['title']}\n{read['seq']}\n+\n{read['qual']}\n")
+                                if output_format in ['both','fasta']:
+                                    fasta_handle.write(f">{read['title']}\n{read['seq']}\n")
+                                #remove used read from the list, so that it won't be used again
+                                seqs.remove(read)
+                                break
 
 
 
