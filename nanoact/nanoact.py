@@ -981,7 +981,7 @@ class NanoAct():
                     mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15,
                     discard_no_match = False,
                     check_both_directions = True,
-                    reverse_complement_rv = True,
+                    reverse_complement_rv_col = True,
                     ):
         try:
             os.makedirs(des, exist_ok=True)
@@ -1022,7 +1022,7 @@ class NanoAct():
                 #Upper case
                 fw_trim = fw_trim.upper()
                 rv_trim = rv_trim.upper()
-                if reverse_complement_rv:
+                if reverse_complement_rv_col:
                     rv_trim = self._reverse_complement(rv_trim)
             except Exception as e:
                 print(e)
@@ -1096,7 +1096,7 @@ class NanoAct():
                     mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15,
                     discard_no_match = False,
                     check_both_directions = True,
-                    reverse_complement_rv = True,
+                    reverse_complement_rv_col = True,
                      ):
         #mode should either be "table" or "case"
         #if mode is "table", BARCODE_INDEX_FILE should be a tsv or csv file with columns SampleID, fw_col, rv_col
@@ -1110,7 +1110,7 @@ class NanoAct():
                               mismatch_ratio_f=mismatch_ratio_f, mismatch_ratio_r=mismatch_ratio_r, 
                               discard_no_match=discard_no_match, 
                               check_both_directions=check_both_directions, 
-                              reverse_complement_rv=reverse_complement_rv,
+                              reverse_complement_rv_col=reverse_complement_rv_col,
                                input_format=input_format,
                                output_format=output_format,
                               )
