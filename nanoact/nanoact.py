@@ -488,7 +488,8 @@ class NanoAct():
                     mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, 
                     expected_length_variation = 0.3, 
                     search_range=150,
-                    output_format="both"
+                    input_format = "fastq",
+                    output_format = "both",
                     ):
         """
         Input: 單個fastq檔案，例如 all.fastq
@@ -508,9 +509,7 @@ class NanoAct():
         6.If no barcode is identified, append it to the "UNKNOWN" dictionary.
         7.Finally, output the demultiplexed reads into different output files based on their barcode.
         """
-        #Check output_format, only accept "fastq" or "fasta" or "both"
-        if output_format not in ["fastq", "fasta", "both"]:
-            raise ValueError("output_format must be either fastq, fasta or both")
+        self._check_input_ouput(input_format=input_format, output_format=output_format)
         # Define the main function for demultiplexing
         if BARCODE_INDEX_FILE.endswith("tsv"):
             sep = "\t"
@@ -542,7 +541,13 @@ class NanoAct():
             pool[id] = []
         # Initialize dictionaries for output files for each sample and additional dictionaries for reads with unknown, multiple, or truncated barcodes
         with open(src, "r") as handle:
-            for record in self._fastq_reader(handle):
+            if input_format == "fastq":
+                reader = self._fastq_reader(handle)
+            elif input_format == "fasta":
+                reader = self._fasta_reader(handle)
+            else:
+                raise ValueError("input_format must be fastq or fasta")
+            for record in reader:
                 ids, integrity, seqs= self._get_sample_id_single(record["seq"], barcode_hash_table, search_range, mismatch_ratio_f, mismatch_ratio_r)
                 if len(ids) == 1:
                     #if only one barcode is identified, append the read to the corresponding sample's output file
