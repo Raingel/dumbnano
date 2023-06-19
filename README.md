@@ -26,6 +26,8 @@
 
 [orientation()](#orientation) 根據提供的FwPrimer/RvPrimer (或其他表格內的欄位)來將raw reads轉成同一個方向
 
+[trim_reads()](#trim_reads) 將raw reads頭尾截除
+
 ---
 ### combine_fastq
 **解壓縮及合併所有fastq.gz檔案。**
@@ -94,11 +96,11 @@ flowchart LR
 ```
 
 <details> 
-	
 	demultiplex = dumb.singlebar(
  				      #src: 輸入檔案，通常是經過qualityfilt處理的raw reads
 		 		    src = '/content/all.fastq',  
 	 			      #des: 一個資料夾，程式會在該資料夾中輸出以SampleID為檔名的fastq檔案或是fasta檔案（由output_format決定），例如 SampleID.fastq
+				      #輸出的序列中，與barcode index吻合的位置會以小寫標記。後續可使用trim_reads()功能將barcode index等人造序列截除。
 		                    des = '/content/drive/MyDrive/Data/2023-000006/2_singlebar/',  
 		        	      #BARCODE_INDEX_FILE: barcode資料表，可以是csv或是tsv檔案，例如 barcode.csv。必須包含SampleID, FwIndex, RvAnchor，ExpectedLength四個欄位。
 		                    BARCODE_INDEX_FILE="/content/drive/MyDrive/Data/2023-000006/230428.csv", 
@@ -146,6 +148,57 @@ flowchart LR
 		                      #output_format: 輸出檔案的格式，預設為both。可以是fastq或是fasta。both代表同時輸出fastq和fasta。
 		                    output_format = "both",
                     )
+</details> 
+
+---
+### trim_reads
+**將raw reads的頭尾截除**
+
+```mermaid
+flowchart LR
+	SampleID_1.fastq/SampleID_1.fas-->|orientation| SampleID_1.fastq/SampleID_1.fas
+```
+
+<details> 
+
+	dumb.trim_reads (
+			  #src: 輸入檔案的資料夾位置
+			src="/content/drive/MyDrive/Data/2023-000010/3_Orientation_dumb/",
+			  #des: 輸出檔案的資料夾位置
+			des="/content/drive/MyDrive/Data/2023-000010/4_trimmed/",
+			
+			  #mode為table或是case。case代表利用singlebar的小寫標記來移除頭尾序列；table則代表利用提供的表格中的資訊移除
+			mode="table",
+			
+			  ##當mode為table時才會用到的參數
+			  #Barcode表單的位置
+			BARCODE_INDEX_FILE="/content/drive/MyDrive/Data/2023-000010/barcode_230615.csv",
+			  #要截除的前端標記點
+			fw_col = "FwIndex",
+			  #要截除的後端標記點
+			rv_col = "RvAnchor",
+			  #前標記點的容錯率。例如FwIndex長度為20bp，則容許0.15*20=3bp的錯誤(edit distance)。:
+			mismatch_ratio_f = 0.15,
+			  #後標記點的容錯率
+			mismatch_ratio_r = 0.15,
+			  #當無法找到標記點時，是否要捨棄該read
+			discard_no_match = False,
+			  #是否要檢查正反兩股
+			check_both_directions = True,
+			  #rv_col的標記點序列是否需要先做reverse complement再比對
+			reverse_complement_rv_col = True, # false if you have reverse complement your rv_col
+			
+			  ##共通的參數
+			  #input_format: 輸入檔案的格式，預設為fastq。可以是fasta或fastq
+			input_format="fastq",
+			  #output_format: 輸出檔案的格式，預設為both。可以是fastq或是fasta。both代表同時輸出fastq和fasta。
+			output_format="both", 
+			  #從距離標記點多遠的位置開始截除。例如標記點為atg時，則對於序列AAAAatgCCCC，若fw_offset為0，則獲得之序列為CCCC；若若fw_offset為2，則獲得的序列為CC
+			fw_offset = 0,
+			rv_offset = 0,
+
+
+	                )
 </details> 
 
 
