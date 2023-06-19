@@ -96,6 +96,7 @@ flowchart LR
 ```
 
 <details> 
+	
 	demultiplex = dumb.singlebar(
  				      #src: 輸入檔案，通常是經過qualityfilt處理的raw reads
 		 		    src = '/content/all.fastq',  
