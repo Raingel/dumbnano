@@ -130,6 +130,7 @@ flowchart LR
 ```
 
 <details> 
+	
 	#取出raw reads的前search_range長度的序列。並將其分別與FwPrimer及RvPrimer做align。若與FwPrimer較相近則代表此read為正股，反之則為反股
 	orientation = dumb.orientation(
  				      #src: 輸入檔案，通常是經過qualityfilt處理的raw reads
