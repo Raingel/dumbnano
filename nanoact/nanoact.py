@@ -361,11 +361,11 @@ class NanoAct():
                     BARCODE_INDEX_FILE = "",
                     FwPrimer = "FwPrimer",
                     RvPrimer = "RvPrimer",
-                    search_region=200):
+                    search_range=200):
         #Input: a folder containing all the fas files, fas_file should be named as {sample_id}.fas
         #Input2: a barcode index file, containing following columns: SampleID, FwPrimer, RvPrimer
         #input_format: fastq or fasta or both
-        #Search_region: number of bases in the beginning of raw read to search for primer
+        #search_range: number of bases in the beginning of raw read to search for primer
         #Output: a folder containing sequences with the right orientation
         self._check_input_ouput(input_format, output_format)
         try:
@@ -412,8 +412,8 @@ class NanoAct():
                             records = self._fastq_reader(handle)
                         for record in records: 
                             #Check if the sequence is in the right orientation
-                            aln_f = edlib.align(F.upper(), record['seq'].upper()[:search_region], mode="HW", task="locations")
-                            aln_r = edlib.align(R.upper(), record['seq'].upper()[:search_region], mode="HW", task="locations")
+                            aln_f = edlib.align(F.upper(), record['seq'].upper()[:search_range], mode="HW", task="locations")
+                            aln_r = edlib.align(R.upper(), record['seq'].upper()[:search_range], mode="HW", task="locations")
                             if aln_f['editDistance'] > aln_r['editDistance']:
                                 record['seq'] = self._reverse_complement(record['seq'])
                             #output.write(f">{record['title']}\n{record['seq']}\n")
