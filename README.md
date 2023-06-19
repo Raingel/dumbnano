@@ -24,6 +24,8 @@
 
 [singlebar()](#singlebar) 根據raw reads的起始端的barcode index進行序列解訊(demultiplex)
 
+[orientation()](#orientation) 根據提供的FwPrimer/RvPrimer (或其他表格內的欄位)來將raw reads轉成同一個方向
+
 ---
 ### combine_fastq
 **解壓縮及合併所有fastq.gz檔案。**
@@ -81,7 +83,7 @@ flowchart LR
 
 ---
 ### singlebar
-**根據品質篩選序列**
+**根據barcode index將raw reads中混合的樣本解訊出來(demultiplex)**
 
 ```mermaid
 flowchart LR
@@ -99,7 +101,7 @@ flowchart LR
 	 			      #des: 一個資料夾，程式會在該資料夾中輸出以SampleID為檔名的fastq檔案或是fasta檔案（由output_format決定），例如 SampleID.fastq
 		                    des = '/content/drive/MyDrive/Data/2023-000006/2_singlebar/',  
 		        	      #BARCODE_INDEX_FILE: barcode資料表，可以是csv或是tsv檔案，例如 barcode.csv。必須包含SampleID, FwIndex, RvAnchor，ExpectedLength四個欄位。
-		                    BARCODE_INDEX_FILE="/content/drive/MyDrive/Data/2023-000006/230428.csv", #barcode index表格
+		                    BARCODE_INDEX_FILE="/content/drive/MyDrive/Data/2023-000006/230428.csv", 
 		      		      #mismatch_ratio_f: FwIndex容許的錯誤率，預設為0.15。例如barcode長度為20bp，則容許0.15*20=3bp的錯誤(edit distance)。:
 				    mismatch_ratio_f = 0.15, 
 				      #mismatch_ratio_r: RvAnchor容許的錯誤率，預設為0.15。
@@ -114,3 +116,36 @@ flowchart LR
 		                    output_format = "both",
                     )
 </details> 
+
+---
+### orientation
+**將raw reads轉至同一個方向**
+
+```mermaid
+flowchart LR
+	SampleID_1.fastq/SampleID_1.fas-->|orientation| SampleID_1.fastq/SampleID_1.fas
+```
+
+<details> 
+	#取出raw reads的前search_range長度的序列。並將其分別與FwPrimer及RvPrimer做align。若與FwPrimer較相近則代表此read為正股，反之則為反股
+	orientation = dumb.orientation(
+ 				      #src: 輸入檔案，通常是經過qualityfilt處理的raw reads
+		 		    src='/content/drive/MyDrive/Data/2023-000003/2_Singlebar_dumb/',  
+	 			      #des: 一個資料夾，程式會在該資料夾中輸出以SampleID為檔名的fastq檔案或是fasta檔案（由output_format決定），例如 SampleID.fastq
+		                    des='/content/drive/MyDrive/Data/2023-000003/3_Orientation_dumb/',  
+		        	      #BARCODE_INDEX_FILE: barcode資料表，可以是csv或是tsv檔案，例如 barcode.csv
+		                    BARCODE_INDEX_FILE="/content/drive/MyDrive/Data/2023-000006/230428.csv",
+		                      #FwPrimer: 正股序列的欄位名稱，預設為"FwPrimer"
+		                    FwPrimer = "FwPrimer",
+		      		      #RvPrimer: 反股序列的欄位名稱，預設為"RvPrimer"
+		                    RvPrimer = "RvPrimer",
+		      		      #search_range: 搜尋FwPrimer/RvPrimer的範圍，預設為200bp。代表搜尋範圍前200bp。
+		                    search_range=150,
+		                      #input_format: 輸入檔案的格式，預設為fastq。可以是fasta或fastq
+		                    input_format = "fastq",
+		                      #output_format: 輸出檔案的格式，預設為both。可以是fastq或是fasta。both代表同時輸出fastq和fasta。
+		                    output_format = "both",
+                    )
+</details> 
+
+
