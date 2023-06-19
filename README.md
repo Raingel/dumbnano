@@ -16,11 +16,13 @@
 
 
 ## Usage
-[combine_fastq()](#combine_fastq)
+[combine_fastq()](#combine_fastq) 合併所有fastq檔案
 
-[nanofilt()](#nanofilt)
+[nanofilt()](#nanofilt) 以長度、品質自fastq檔案中篩選raw reads
 
-[qualityfilt()](#qualityfilt)
+[qualityfilt()](#qualityfilt) 以長度、品質自fastq檔案中篩選raw reads
+
+[singlebar()](#singlebar) 根據raw reads的起始端的barcode index進行序列解訊(demultiplex)
 
 ---
 ### combine_fastq
@@ -57,7 +59,8 @@ qualityfilt的是由本專案設計，其單純利用每序列的平均品質分
 flowchart LR
     all.fastq-->|nanofilt/qualityfilt| all_nanofilt.fastq/all_qualityfilt.fastq
 ```
- 
+<details> 
+	
 	all_fastq = dumb.nanofilt(src = '/content/all.fastq',
                            des = '/content/drive/MyDrive/Data/2023-000006/1_nanoflit/',
                            name = 'all_nanofilt.fastq',
@@ -73,4 +76,41 @@ flowchart LR
                            MIN_LEN = 400, #depends on the length of your reads 
                            MAX_LEN = 7000 #depends on the length of your reads
 			   )
+</details>
 
+
+---
+### singlebar
+**根據品質篩選序列**
+
+```mermaid
+flowchart LR
+	all.fastq-->|singlebar| SampleID_1.fastq/SampleID_1.fas
+	all.fastq-->|singlebar| SampleID_2.fastq/SampleID_2.fas
+	all.fastq-->|singlebar| SampleID_3.fastq/SampleID_3.fas
+	all.fastq-->|singlebar| ...
+```
+
+<details> 
+	
+	demultiplex = dumb.singlebar(
+ 				      #src: 輸入檔案，通常是經過qualityfilt處理的raw reads
+		 		    src = '/content/all.fastq',  
+	 			      #des: 一個資料夾，程式會在該資料夾中輸出以SampleID為檔名的fastq檔案或是fasta檔案（由output_format決定），例如 SampleID.fastq
+		                    des = '/content/drive/MyDrive/Data/2023-000006/2_singlebar/',  
+		        	      #BARCODE_INDEX_FILE: barcode資料表，可以是csv或是tsv檔案，例如 barcode.csv。必須包含SampleID, FwIndex, RvAnchor，ExpectedLength四個欄位。
+		                    BARCODE_INDEX_FILE="/content/drive/MyDrive/Data/2023-000006/230428.csv", #barcode index表格
+		      		      #mismatch_ratio_f: FwIndex容許的錯誤率，預設為0.15。例如barcode長度為20bp，則容許0.15*20=3bp的錯誤(edit distance)。:
+				    mismatch_ratio_f = 0.15, 
+				      #mismatch_ratio_r: RvAnchor容許的錯誤率，預設為0.15。
+				    mismatch_ratio_r = 0.15, 
+			              #expected_length_variation: 預期的read長度變異，預設為0.3。例如預期的read長度為300bp，則容許0.3*300=90bp的變異。
+		                    expected_length_variation = 0.3, 
+		                      #search_range: 搜尋barcode的範圍，預設為150bp。代表搜尋範圍為前150bp和後150bp。
+		                    search_range=150,
+		                      #input_format: 輸入檔案的格式，預設為fastq。可以是fasta或fastq
+		                    input_format = "fastq",
+		                      #output_format: 輸出檔案的格式，預設為both。可以是fastq或是fasta。both代表同時輸出fastq和fasta。
+		                    output_format = "both",
+                    )
+</details> 
