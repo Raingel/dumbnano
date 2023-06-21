@@ -422,17 +422,40 @@ class NanoAct():
                             if output_format == "both" or output_format == "fastq":
                                 output_fastq.write(f"@{record['title']}\n{record['seq']}\n+\n{record['qual']}\n")
         return des
-    def mafft_consensus (self, src, des):
+    def mafft_consensus (self, src, des, minimal_reads=0, input_format="fasta"):
         try:
             os.makedirs(des)
         except:
             pass
         abs_des = os.path.abspath(des)
         for f in os.scandir(src):
-            if f.is_file() and f.name.endswith(".fas"):
+            SampleID, ext = os.path.splitext(f.name)
+            if f.is_file():
+                if input_format == "fasta" and ext in self.fasta_ext:
+                    #Count seq_num 
+                    seq_num = len(list(self._fasta_reader(f.path)))
+                    if seq_num < minimal_reads:
+                        print(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
+                        continue
+                    fas_path = f.path
+                    pass
+                elif input_format == "fastq" and ext in self.fastq_ext:
+                    #Count seq_num
+                    seq_num = len(list(self._fastq_reader(f.path)))
+                    if seq_num < minimal_reads:
+                        print(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
+                        continue
+                    #Convert fastq to fasta
+                    self._clean_temp()
+                    fas_path = f"{self.TEMP}/from_fastq.fas"
+                    self._fastq_to_fasta(f.path, fas_path)
+                    pass
+                else:
+                    continue
+                
                 #Align sequences
                 print("Working on", f.name, "...")
-                self._mafft(f.path, f"{abs_des}/aln_{f.name}")
+                self._mafft(fas_path, f"{abs_des}/aln_{f.name}")
                 #naive consensus
                 with open(f"{abs_des}/aln_{f.name}") as handle:
                     records = list(self._fasta_reader(handle))
