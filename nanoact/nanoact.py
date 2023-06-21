@@ -433,16 +433,16 @@ class NanoAct():
             if f.is_file():
                 if input_format == "fasta" and ext in self.fasta_ext:
                     #Count seq_num 
-                    seq_num = len(list(self._fasta_reader(f.path)))
-                    if seq_num < minimal_reads:
+                    seq_num = len(list(self._fasta_reader(open(f.path,'r'))))
+                    if seq_num <= minimal_reads:
                         print(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
                         continue
                     fas_path = f.path
                     pass
                 elif input_format == "fastq" and ext in self.fastq_ext:
                     #Count seq_num
-                    seq_num = len(list(self._fastq_reader(f.path)))
-                    if seq_num < minimal_reads:
+                    seq_num = len(list(self._fastq_reader(open(f.path,'r'))))
+                    if seq_num <= minimal_reads:
                         print(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
                         continue
                     #Convert fastq to fasta
