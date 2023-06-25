@@ -1663,12 +1663,16 @@ class NanoAct():
                 title = title.replace(" ", "_")
                 f.write(">{}\n{}\n".format(title, rec["seq"]))  
         return f"{des}/{name}.fas"     
-    def taxonomy_assign(self, src, des, input_format='fastq', ref_db="Fungi_ITS", 
-                        mmseqs="/nanoact/bin/mmseqs", 
+    def taxonomy_assign(self, src, des, 
+                        input_format='fastq',
                         custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
                         custom_gbff = [],
                         evalue_thres=1e-80,
         ):
+        try:
+            os.mkdir(des)
+        except:
+            pass
         if True: #Debug switch, rebuild the database takes time
             #Preparing ref_db
             self._clean_temp()
