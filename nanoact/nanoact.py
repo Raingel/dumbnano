@@ -1598,9 +1598,15 @@ class NanoAct():
         ranks = {} 
         rank_base = {"kingdom":"incertae sedis", "phylum":"incertae sedis", "class":"incertae sedis", "order":"incertae sedis", "family":"incertae sedis", "genus":"incertae sedis"}
         try:
+            #If there is only one taxid, the result will be a dict
+            if isinstance(r["TaxaSet"]["Taxon"], dict):
+                r["TaxaSet"]["Taxon"] = [r["TaxaSet"]["Taxon"]]
             for query in r["TaxaSet"]["Taxon"]:
                 rank = rank_base.copy()
                 for i in query['LineageEx']['Taxon']:
+                    if i['Rank'] == 'superkingdom':
+                        #For Bacteria and Archaea
+                        i['Rank'] = 'kingdom'
                     if i['Rank'] in rank.keys():
                         rank[i['Rank']] = i['ScientificName']
                 ranks[query['TaxId']] = rank
@@ -1614,19 +1620,22 @@ class NanoAct():
        
         #URI = "https://ftp.ncbi.nlm.nih.gov/refseq/TargetedLoci/Fungi/fungi.ITS.gbff.gz"
         name = gbff_URI.split("/")[-1]
-        name, _ = os.path.splitext(name)
-        
+        basename, _ = os.path.splitext(name)
         print(f"Downloading {name} database from NCBI refseq ftp...")
         r = get(gbff_URI, allow_redirects=True)
-        open(f"{des}/{name}.gz", 'wb').write(r.content)
-        #Extract gbff.gz
-        print("Extracting gbff.gz file...")
-        with gzip.open(f"{des}/{name}.gz", 'rb') as f_in:
-            with open(f"{des}/{name}", 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        #Delete gbff.gz
-        os.remove(f"{des}/{name}.gz")
-        return f"{des}/{name}"
+        open(f"{des}/{name}", 'wb').write(r.content)
+        name, _ = os.path.splitext(name)
+        if name.endswith(".gz"):
+            #Extract gbff.gz
+            print("Extracting gbff.gz file...")
+            with gzip.open(f"{des}/{name}", 'rb') as f_in:
+                with open(f"{des}/{basename}", 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            #Delete gbff.gz
+            os.remove(f"{des}/{name}.gz")
+            return f"{des}/{basename}"
+        else:
+            return f"{des}/{name}"
     def _gbffgz_to_taxfas(self, gbff_path, des):
         name = gbff_path.split("/")[-1]
         name, _ = os.path.splitext(name)
@@ -1652,66 +1661,48 @@ class NanoAct():
                     lineage = "Unclassified"
                 title = "{}||{}||{}".format(rec["accession"], rec["organism"], lineage)
                 title = title.replace(" ", "_")
-                f.write(">{}\n{}\n".format(title, rec["seq"]))       
+                f.write(">{}\n{}\n".format(title, rec["seq"]))  
+        return f"{des}/{name}.fas"     
     def taxonomy_assign(self, src, des, input_format='fastq', ref_db="Fungi_ITS", 
                         mmseqs="/nanoact/bin/mmseqs", 
-                        custom_db = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
+                        custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
                         custom_gbff = [],
                         evalue_thres=1e-80,
         ):
         if True: #Debug switch, rebuild the database takes time
             #Preparing ref_db
             self._clean_temp()
-            if ref_db == "Fungi_ITS":
-                #Download gbff.gz from ncbi refseq ftp
-                print("Downloading Fungi_ITS database from NCBI refseq ftp...")
-                URI = "https://ftp.ncbi.nlm.nih.gov/refseq/TargetedLoci/Fungi/fungi.ITS.gbff.gz"
-                print("Extracting gbff.gz file...")
-                r = get(URI, allow_redirects=True)
-                open(f"{self.TEMP}/fungi.ITS.gbff.gz", 'wb').write(r.content)
-                #Extract gbff.gz
-                with gzip.open(f"{self.TEMP}/fungi.ITS.gbff.gz", 'rb') as f_in:
-                    with open(f"{self.TEMP}/fungi.ITS.gbff", 'wb') as f_out:
-                        shutil.copyfileobj(f_in, f_out)
-
-            recs = list(self._gbff_reader(open(f"{self.TEMP}/fungi.ITS.gbff", 'r')))
+            custom_fas = []
             #Download custom_db
-            if custom_db != []:
+            if custom_acc != []:
                 print("Downloading custom database from NCBI...")
                 cus_des = f"{self.TEMP}/custom_db.gbff"
                 gbff = ""
                 #Download 100 acc at a time
-                for i in range(0, len(custom_db), 100):
-                    gbff += self._get_gbff_by_acc(custom_db[i:i+100])
+                for i in range(0, len(custom_acc), 100):
+                    gbff += self._get_gbff_by_acc(custom_acc[i:i+100])
                 with open(cus_des, 'w') as f:
                     f.write(gbff)
-                recs += list(self._gbff_reader(open(cus_des, 'r')))
+                fas = self._gbffgz_to_taxfas(cus_des, self.TEMP)
+                custom_fas.append(fas)
+            #Download custom_gbff
+            if custom_gbff != []:
+                print("Downloading custom gbff file from NCBI...")
+                for gbff_URI in custom_gbff:
+                    gbff_path = self._gbffgz_download(gbff_URI, self.TEMP)
+                    fas = self._gbffgz_to_taxfas(gbff_path, self.TEMP)
+                    custom_fas.append(fas)
 
-            #Get taxinfo for each record
-            print("Getting taxinfo for each record...")
-            taxinfos = {}
-            taxid_list = set()
-            for rec in recs:
-                taxid_list.add(rec["taxid"])
-            #Retrieve taxon info by taxid, 100 taxids per request
-            batch = 100
-            for i in range(0, len(taxid_list), batch):
-                taxinfos.update(self._lineage_by_taxid(list(taxid_list)[i:i+batch]))
-                print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...", end="\r")
-            print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...")
-            #write fasta
-            with open(f"{self.TEMP}/ref_db.fas", 'w') as f:
-                for rec in recs:
-                    try:
-                        lineage = ";".join([taxinfos[rec["taxid"]][i] for i in ["kingdom", "phylum", "class", "order", "family", "genus"]])
-                    except Exception as e:
-                        lineage = "Unclassified"
-                    title = "{}||{}||{}".format(rec["accession"], rec["organism"], lineage)
-                    title = title.replace(" ", "_")
-                    f.write(">{}\n{}\n".format(title, rec["seq"]))
 
             #Use easy-search to do taxonomy assignment
             lib = os.path.dirname(os.path.realpath(__file__))
+            #Merge custom_fas and fas.gz in refdb folder into /temp/ref_db.fas
+            print("Merging custom database and ref_db...")
+            with open(f"{self.TEMP}/ref_db.fas", 'w') as handle:
+                for f in os.scandir(lib+"/refdb"):
+                    if f.is_file() and f.name.endswith(".fas.gz"):
+                        with gzip.open(f.path, 'rb') as f_in:
+                            handle.write(f_in.read().decode())
             mmseqs = f"{lib}/bin/mmseqs"
             for f in os.scandir(src):
                 SampleID, ext = os.path.splitext(f.name)
@@ -1900,3 +1891,4 @@ class NanoAct():
             #Save the figure
             plt.savefig(f"{des}/{SampleID}_sankey.png", dpi=300, bbox_inches='tight')
             #plt.close(fig)
+# %%
