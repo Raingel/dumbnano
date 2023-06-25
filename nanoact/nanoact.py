@@ -1614,7 +1614,7 @@ class NanoAct():
                         custom_db = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
                         evalue_thres=1e-80,
         ):
-        if False:
+        if True: #Debug switch, rebuild the database takes time
             #Preparing ref_db
             self._clean_temp()
             if ref_db == "Fungi_ITS":
@@ -1716,7 +1716,142 @@ class NanoAct():
             #Write to csv
             m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
                     
-            
+    def taxonomy_assign_visualizer(self, src, des, minimal_reads=1):
+        from sankeyflow import Sankey
+        for f in os.scandir(src):
+            if f.name.endswith("_taxonomyassignment.csv"):
+                tax_assign = pd.read_csv(f.path)
+            else:
+                continue
+            SampleID = f.name.replace("_taxonomyassignment.csv","")
+            print("Processing file: ", f.name)
+            #Initialize some variables
+            RANK = ["kingdom","phylum","class","order","family","genus"]
+            RANK_COLOR = [(255/255, 183/255, 178/255, 0.5), 
+                        (205/255, 220/255, 57/255, 0.5), 
+                        (100/255, 181/255, 246/255, 0.5), 
+                        (255/255, 241/255, 118/255, 0.5), 
+                        (255/255, 138/255, 101/255, 0.5), 
+                        (171/255, 71/255, 188/255, 0.5)]
+            # Add frequency for each rank
+            for r in RANK:
+                tax_assign[f"{r}_freq"] = tax_assign[r].map(tax_assign[r].value_counts())
+            #Discard freq <=1
+            for r in RANK:
+                tax_assign = tax_assign[tax_assign[f"{r}_freq"]>=minimal_reads]
+            #Sort by the frequency of each rank
+            tax_assign = tax_assign.sort_values(by=[f"{RANK[0]}_freq",f"{RANK[1]}_freq",f"{RANK[2]}_freq",f"{RANK[3]}_freq",f"{RANK[4]}_freq",f"{RANK[5]}_freq"], ascending=False)
+            #Building source_target_occurrence data
+            src_tar = {}
+            tax_list = []
+            tax_occurence = {}
+            for index, row in tax_assign.iterrows():
+                #extract rank to rank pair id
+                for r_no, r1 in enumerate(RANK):
+                    #Get the next rank, if the rank is the last rank, set it to None
+                    r2 = RANK[r_no+1] if r_no+1 < len(RANK) else None
+                    #Get the id of r1 rank in the row
+                    try:
+                        #See if the rank is already in the list
+                        id1 = tax_list.index(f"{r1}_{row[r1]}")
+                    except:
+                        #If the rank is first time to appear, add it to the list
+                        tax_list.append(f"{r1}_{row[r1]}")
+                        id1 = tax_list.index(f"{r1}_{row[r1]}")
 
+                    #Count the occurence of the rank
+                    tax_occurence[f"{r1}_{row[r1]}"] = tax_occurence.get(f"{r1}_{row[r1]}",0) + 1
+                    if r2 == None:
+                        continue
+                    #Get the id of r2 rank in the row
+                    try:
+                        #See if the rank is already in the list
+                        id2 = tax_list.index(f"{r2}_{row[r2]}")
+                    except:
+                        #If the rank is first time to appear, add it to the list
+                        tax_list.append(f"{r2}_{row[r2]}")
+                        id2 = tax_list.index(f"{r2}_{row[r2]}")
 
+                    src_tar[(id1,id2)] = src_tar.get((id1,id2),0) + 1
+                    """ 
+                    Example:
+                    (0, 1): 607,
+                    (1, 2): 606,
+                    (2, 3): 606,
+                    (3, 4): 606,
+                    (4, 5): 606,
+                    """
 
+            #Building input data for Sankey
+            nodes_name = {key:[] for key in RANK}
+            nodes_num = {key:[] for key in RANK}
+            flows = []
+            #Save a copy df of the src_tar
+            src_tar_df = pd.DataFrame()
+            for s_t in src_tar:
+                MINIMUM_READS = 1
+                if src_tar[s_t] < MINIMUM_READS:
+                    continue
+                s = tax_list[s_t[0]]
+                t = tax_list[s_t[1]]
+                r_s, taxon = s.split("_")[0], "_".join(s.split("_")[1:])
+                r_s_id = RANK.index(r_s)
+                color = RANK_COLOR[r_s_id]
+                flows.append([s,t,src_tar[s_t],{'color':color}])
+                #Save info to src_tar_df
+                src_tar_df = pd.concat([src_tar_df,
+                                        pd.DataFrame([[s,t,s_t[0],s_t[1],src_tar[s_t],r_s,color]],
+                                                    columns=["source","target","source_id","target_id","value","source_rank", "color_by_rank"])]
+                                        )   
+                #Save info for nodes
+                if taxon not in nodes_name[r_s]:
+                    nodes_name[r_s].append(taxon)
+                    nodes_num[r_s].append(src_tar[s_t])
+                else:
+                    nodes_num[r_s][nodes_name[r_s].index(taxon)] += src_tar[s_t]
+                #Genus will not appear in the s, so we need to add it manually
+                t_s, taxon = t.split("_")[0], "_".join(t.split("_")[1:])
+                if t_s == "genus":
+                    if taxon not in nodes_name[t_s]:
+                        nodes_name[t_s].append(taxon)
+                        nodes_num[t_s].append(src_tar[s_t])
+                    else:
+                        nodes_num[t_s][nodes_name[t_s].index(taxon)] += src_tar[s_t]
+                #Building Node(Label)
+                nodes = []
+                for i, r in enumerate(RANK):
+                    nodes.append(
+                        [
+                            (
+                            f"{r}_{e}",nodes_num[r][nodes_name[r].index(e)],
+                                {"color":"grey"}
+                                ) 
+                                for e in nodes_name[r]
+                        ]
+                        
+                        )
+            src_tar_df.to_csv(f"{des}/{SampleID}_flow.csv", index=False)
+
+            #Preparing Sankey Diagram
+            #Estimate fig size by the max number of vertical nodes (Mostly at genus level)
+            max_nodes = max([len(e) for e in nodes])
+            fig, ax = plt.subplots(1,1,figsize=(30, max(max_nodes/1.8,10)))
+            s = Sankey(flows=flows, 
+                    nodes=nodes,
+                    flow_color_mode='source',
+                    node_opts=dict(
+                                    label_format='{label} ({value:.0f})',
+                                    label_opts=dict(fontsize=16),
+                                    label_pos='right',
+                                    ),
+                    label_pad_x = 10,
+                    scale=0.1)
+            #Revise label after the sankey is established, this can avoid some problems caused by the confliction of label
+            for tax in tax_list:
+                s.find_node(tax)[0].label= "_".join(s.find_node(tax)[0].label.split("_")[1:])
+            #Add title
+            ax.set_title(f"{SampleID} Taxonomic Assignment",fontsize=25)
+            s.draw(ax=ax)
+            #Save the figure
+            plt.savefig(f"{des}/{SampleID}_sankey.png", dpi=300, bbox_inches='tight')
+            #plt.close(fig)
