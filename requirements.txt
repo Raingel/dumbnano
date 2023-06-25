@@ -4,3 +4,4 @@ NanoFilt
 matplotlib
 xmltodict
 sankeyflow
+requests
