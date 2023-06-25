@@ -18,15 +18,15 @@ gbff_list = ["https://ftp.ncbi.nlm.nih.gov/refseq/TargetedLoci/Fungi/fungi.ITS.g
              "https://ftp.ncbi.nlm.nih.gov/refseq/TargetedLoci/Archaea/archaea.5SrRNA.gbff.gz"
              ]
 
-refdb_path = "./refdb/"
+refdb_path = f"{libpath}/refdb/"
 
 
 for gbff_URI in gbff_list:
     gbff_path = dumb._gbffgz_download(gbff_URI=gbff_URI, 
-                          des=libpath+"/refdb/"
+                          des=refdb_path
                           )
     dumb._gbffgz_to_taxfas(gbff_path=gbff_path,
-                           des = libpath+"/refdb/"
+                           des = refdb_path
                             )
     os.remove(gbff_path)
     
