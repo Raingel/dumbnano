@@ -470,9 +470,6 @@ class NanoAct():
                         out.write(f">{f.name}\n{consensus}")
 
         return abs_des
- 
-
-
     def _get_sample_id_single (self, seq, barcode_hash_table, search_range=150, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
         ids = []
@@ -756,7 +753,6 @@ class NanoAct():
         FAILED_NUM = len(pool['Unknown']) + len(pool['Multiple']) + len(pool['IncorrectLength'])
         print (f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
         return des  
-
     def combine_fastq(self, src, des, name = "all.fastq"):
         try:
             os.makedirs(des, exist_ok=True)
@@ -1001,7 +997,6 @@ class NanoAct():
                         #print("Labeled HEAD not found in ", s['title'])
                         
         return des
-
     def _trim_by_seq (self, src, des,  
                     BARCODE_INDEX_FILE,fw_col = "FwPrimer",rv_col = "RvPrimer",
                     input_format="fastq", output_format = "both",
@@ -1112,7 +1107,6 @@ class NanoAct():
                         outfile_fastq.write(f"@{s['title']}\n{s['seq']}\n+\n{s['qual']}\n") 
             print(f"Total reads: {total}, trimmed forward: {trimmed_F}, trimmed reverse: {trimmed_R}")
         return des
-
     def trim_reads(self, 
                    src, des,
                    mode="case",
@@ -1311,7 +1305,6 @@ class NanoAct():
                         for rec in bin[cluster_no]:
                             handle.write(f"@{rec['title']}\n{rec['seq']}\n+\n{rec['qual']}\n")
         return des
-
     def vsearch_OTUs(self, src, des, 
                      input_format = "fastq",
                      output_format = "both",
@@ -1385,7 +1378,6 @@ class NanoAct():
                             handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
             #Copy otu table to destination
             shutil.copy(f"{self.TEMP}/all.otutab.txt", f"{abs_des}/{SampleID}_otu_table.txt")
-
     def cd_hit_est(self, src, des, 
                    input_format = "fastq",
                    output_format = "both",                   
@@ -1462,18 +1454,12 @@ class NanoAct():
                                 #remove used read from the list, so that it won't be used again
                                 seqs.remove(read)
                                 break
-
-
-
-
-
     def _calculate_5mer_frequency(self, sequence):
         frequency = {}
         for i in range(len(sequence) - 4):
             kmer = sequence[i:i+5]
             frequency[kmer] = frequency.get(kmer, 0) + 1
         return frequency
-    
     def fas_to_5mer(self, fas_path):
         frequency_vectors = []
         sequences = []
@@ -1489,7 +1475,6 @@ class NanoAct():
         #fill nan with 0
         df.fillna(0, inplace=True)
         return df
-
     def _check_input_ouput(self, input_format, output_format):
         if input_format not in ['fasta', 'fastq']:
             raise ValueError("Input format must be either 'fasta' or 'fastq'")
@@ -1497,7 +1482,6 @@ class NanoAct():
             raise ValueError("Output format must be either 'fasta', 'fastq' or 'both'")
         if input_format == 'fasta' and output_format in ['fastq', 'both']:
             raise ValueError("fasta file does not contain quality scores, so it cannot be converted to fastq")
-        
     def random_sampler(self, src, des, input_format='fasta', output_format='fasta', ratio=0.2):
         self._check_input_ouput(input_format, output_format)
         with open(src, 'r') as handle:
@@ -1525,4 +1509,214 @@ class NanoAct():
             if output_format == 'fastq' or output_format == 'both':
                 fastq_handle.close()
             print(f"Total reads: {total}, sampled reads: {sampled}, ratio: {sampled/total}")
+    def region_extract (self, src, des, input_format='fastq', output_format='both', 
+                        splicer={"start":("TCATTTAGAG","GCCCGTCGCT","GAAGTAAAAG","TCGTAACAAG"),
+                                 "end":("GCTGAACTTA","GCATATCAA","ATCAATAAGCG","AAGCGGAGGA")
+                                 }
+                        ):
+        self._check_input_ouput(input_format, output_format)
+        try:
+            os.mkdir(des)
+        except:
+            pass
+        for f in os.scandir(src):
+            SampleID, ext = os.path.splitext(f.name)
+            if input_format == 'fasta' and ext in  self.fasta_ext:
+                seqs = self._fasta_reader(open(f.path,"r"))
+            elif input_format == 'fastq' and ext in self.fastq_ext:
+                seqs = self._fastq_reader(open(f.path,"r"))
+            else:
+                continue
+            print("Processing file: ", f.name)
+
+            if output_format == 'fasta' or output_format == 'both':
+                fasta_handle = open(f"{des}/{SampleID}.fas", 'w')
+            if output_format == 'fastq' or output_format == 'both':
+                fastq_handle = open(f"{des}/{SampleID}.fastq", 'w')
+            total_reads = 0
+            total_extracted = 0
+            for seq in seqs:
+                total_reads += 1
+                start = -1
+                end = -1
+                for splice in splicer['start']:
+                    aln = edlib.align(splice, seq['seq'], mode="HW", task="locations", k=1)
+                    if aln['locations'] != []:
+                        start = aln['locations'][0][0]
+                        break
+                for splice in splicer['end']:
+                    aln = edlib.align(splice, seq['seq'], mode="HW", task="locations", k=1)
+                    if aln['locations'] != []:
+                        end = aln['locations'][0][1]+1
+                        break
+                #if both start and end are found
+                if start != -1 and end != -1 and len(seq['seq'][start:end]) > 0:
+                    #Save the extracted region
+                    if output_format == 'fasta' or output_format == 'both':
+                        fasta_handle.write(f">{seq['title']}\n{seq['seq'][start:end]}\n")
+                    if output_format == 'fastq' or output_format == 'both':
+                        fastq_handle.write(f"@{seq['title']}\n{seq['seq'][start:end]}\n+\n{seq['qual'][start:end]}\n")
+                    total_extracted += 1
+
+    def _get_gbff_by_acc(self, accession_no = ['LC729284','LC729293']):
+        URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id={}&rettype=gbwithparts&retmode=text'.format(",".join(accession_no))
+        data = get(URI)
+        return data.text   
+    def _gbff_reader(self, handle):
+        line = handle.readline()
+        data = {}
+        while line:
+            if line.startswith("ACCESSION"):
+                data["accession"] = line.split()[1]
+            if line.startswith("  ORGANISM  "):
+                data["organism"] = line.replace("  ORGANISM  ", "").strip()
+            if line.startswith('                     /db_xref="taxon:'):
+                data["taxid"] = line.replace('                     /db_xref="taxon:', "").replace('"', "").strip()
+
+            if line.startswith("ORIGIN"):
+                line = handle.readline()
+                seq = ""
+                while not line.startswith("//"):
+                    seq += line.replace(" ", "").replace("\n", "").replace("\r", "").replace("0", "").replace("1", "").replace("2", "").replace("3", "").replace("4", "").replace("5", "").replace("6", "").replace("7", "").replace("8", "").replace("9", "").upper()
+                    line = handle.readline()
+                data["seq"] = seq
+            
+            if line.startswith("//"):
+                yield data
+                data = {}    
+            line = handle.readline()
+    def _lineage_by_taxid(self, taxid=['3016022', '2888342']):
+        # Get taxon info by taxid
+        taxid_info_URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&rettype=xml&id={}'.format(",".join(taxid))
+        r = get(taxid_info_URI)
+        try:
+            r = xmltodict.parse(r.text)
+        except:
+            print(taxid_info_URI)
+            print(r.text)
+            return None
+        ranks = {} 
+        rank_base = {"kingdom":"incertae sedis", "phylum":"incertae sedis", "class":"incertae sedis", "order":"incertae sedis", "family":"incertae sedis", "genus":"incertae sedis"}
+        try:
+            for query in r["TaxaSet"]["Taxon"]:
+                rank = rank_base.copy()
+                for i in query['LineageEx']['Taxon']:
+                    if i['Rank'] in rank.keys():
+                        rank[i['Rank']] = i['ScientificName']
+                ranks[query['TaxId']] = rank
+                
+        except Exception as e:
+            print(e)
+            pass
+        return ranks
+    def taxonomy_assign(self, src, des, input_format='fastq', ref_db="Fungi_ITS", 
+                        mmseqs="/nanoact/bin/mmseqs", 
+                        custom_db = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
+                        evalue_thres=1e-80,
+        ):
+        if False:
+            #Preparing ref_db
+            self._clean_temp()
+            if ref_db == "Fungi_ITS":
+                #Download gbff.gz from ncbi refseq ftp
+                print("Downloading Fungi_ITS database from NCBI refseq ftp...")
+                URI = "https://ftp.ncbi.nlm.nih.gov/refseq/TargetedLoci/Fungi/fungi.ITS.gbff.gz"
+                print("Extracting gbff.gz file...")
+                r = get(URI, allow_redirects=True)
+                open(f"{self.TEMP}/fungi.ITS.gbff.gz", 'wb').write(r.content)
+                #Extract gbff.gz
+                with gzip.open(f"{self.TEMP}/fungi.ITS.gbff.gz", 'rb') as f_in:
+                    with open(f"{self.TEMP}/fungi.ITS.gbff", 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+
+            recs = list(self._gbff_reader(open(f"{self.TEMP}/fungi.ITS.gbff", 'r')))
+            #Download custom_db
+            if custom_db != []:
+                print("Downloading custom database from NCBI...")
+                cus_des = f"{self.TEMP}/custom_db.gbff"
+                gbff = ""
+                #Download 100 acc at a time
+                for i in range(0, len(custom_db), 100):
+                    gbff += self._get_gbff_by_acc(custom_db[i:i+100])
+                with open(cus_des, 'w') as f:
+                    f.write(gbff)
+                recs += list(self._gbff_reader(open(cus_des, 'r')))
+
+            #Get taxinfo for each record
+            print("Getting taxinfo for each record...")
+            taxinfos = {}
+            taxid_list = set()
+            for rec in recs:
+                taxid_list.add(rec["taxid"])
+            #Retrieve taxon info by taxid, 100 taxids per request
+            batch = 100
+            for i in range(0, len(taxid_list), batch):
+                taxinfos.update(self._lineage_by_taxid(list(taxid_list)[i:i+batch]))
+                print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...", end="\r")
+            print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...")
+            #write fasta
+            with open(f"{self.TEMP}/ref_db.fas", 'w') as f:
+                for rec in recs:
+                    try:
+                        lineage = ";".join([taxinfos[rec["taxid"]][i] for i in ["kingdom", "phylum", "class", "order", "family", "genus"]])
+                    except Exception as e:
+                        lineage = "Unclassified"
+                    title = "{}||{}||{}".format(rec["accession"], rec["organism"], lineage)
+                    title = title.replace(" ", "_")
+                    f.write(">{}\n{}\n".format(title, rec["seq"]))
+
+            #Use easy-search to do taxonomy assignment
+            lib = os.path.dirname(os.path.realpath(__file__))
+            mmseqs = f"{lib}/bin/mmseqs"
+            for f in os.scandir(src):
+                SampleID, ext = os.path.splitext(f.name)
+                if input_format == 'fasta' and ext in  self.fasta_ext:
+                    seqs = self._fasta_reader(open(f.path,"r"))
+                elif input_format == 'fastq' and ext in self.fastq_ext:
+                    seqs = self._fastq_reader(open(f.path,"r"))
+                else:
+                    continue
+                print("Processing file: ", f.name)
+                query = f"{self.TEMP}/query.fas"
+                db = f"{self.TEMP}/ref_db.fas"
+                with open(query, 'w') as f:
+                    for seq in seqs:
+                        f.write(">{}\n{}\n".format(seq["title"], seq["seq"]))
+                #mmseqs easy-search
+                self._exec(f"{mmseqs} easy-search {query} {db} {des}/{SampleID}.m8 {self.TEMP}/tmp --search-type 3 -a -s 7.5", 
+                        suppress_output=False)
+        for f in os.scandir(des):
+            if not f.name.endswith(".m8"):
+                continue
+            print("Processing file: ", f.name)
+            SampleID, ext = os.path.splitext(f.name)
+            #Parse m8 file
+            m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
+            m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
+            #Remove duplicate qseqid, only preserve the hightest evalue
+            m8_df = m8_df.sort_values(by=['qseqid', 'evalue'])
+            m8_df = m8_df.drop_duplicates(subset=['qseqid'], keep='first')
+            for index, row in m8_df.iterrows():
+                if row["evalue"] > evalue_thres:
+                    #Set to Unclassified if evalue > evalue_thres
+                    m8_df.loc[index, "kingdom"] = "Unclassified"
+                    m8_df.loc[index, "phylum"] = "Unclassified"
+                    m8_df.loc[index, "class"] = "Unclassified"
+                    m8_df.loc[index, "order"] = "Unclassified"
+                    m8_df.loc[index, "family"] = "Unclassified"
+                    m8_df.loc[index, "genus"] = "Unclassified"
+                else:
+                    lineage = row['sseqid'].split('||')[2].split(';')
+                    m8_df.loc[index, "kingdom"] = lineage[0]
+                    m8_df.loc[index, "phylum"] = lineage[1]
+                    m8_df.loc[index, "class"] = lineage[2]
+                    m8_df.loc[index, "order"] = lineage[3]
+                    m8_df.loc[index, "family"] = lineage[4]
+                    m8_df.loc[index, "genus"] = lineage[5]       
+            #Write to csv
+            m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
                     
+            
+
+
+
