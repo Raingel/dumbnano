@@ -1609,9 +1609,54 @@ class NanoAct():
             print(e)
             pass
         return ranks
+    
+    def _gbffgz_download(self,gbff_URI, des):
+       
+        #URI = "https://ftp.ncbi.nlm.nih.gov/refseq/TargetedLoci/Fungi/fungi.ITS.gbff.gz"
+        name = gbff_URI.split("/")[-1]
+        name, _ = os.path.splitext(name)
+        
+        print(f"Downloading {name} database from NCBI refseq ftp...")
+        r = get(gbff_URI, allow_redirects=True)
+        open(f"{des}/{name}.gz", 'wb').write(r.content)
+        #Extract gbff.gz
+        print("Extracting gbff.gz file...")
+        with gzip.open(f"{des}/{name}.gz", 'rb') as f_in:
+            with open(f"{des}/{name}", 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        #Delete gbff.gz
+        os.remove(f"{des}/{name}.gz")
+        return f"{des}/{name}"
+    def _gbffgz_to_taxfas(self, gbff_path, des):
+        name = gbff_path.split("/")[-1]
+        name, _ = os.path.splitext(name)
+        recs = list(self._gbff_reader(open(gbff_path, 'r')))
+        #Get taxinfo for each record
+        print("Getting taxinfo for each record...")
+        taxinfos = {}
+        taxid_list = set()
+        for rec in recs:
+            taxid_list.add(rec["taxid"])
+        #Retrieve taxon info by taxid, 100 taxids per request
+        batch = 100
+        for i in range(0, len(taxid_list), batch):
+            taxinfos.update(self._lineage_by_taxid(list(taxid_list)[i:i+batch]))
+            print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...", end="\r")
+        print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...")
+        #write fasta
+        with open(f"{des}/{name}.fas", 'w') as f:
+            for rec in recs:
+                try:
+                    lineage = ";".join([taxinfos[rec["taxid"]][i] for i in ["kingdom", "phylum", "class", "order", "family", "genus"]])
+                except Exception as e:
+                    lineage = "Unclassified"
+                title = "{}||{}||{}".format(rec["accession"], rec["organism"], lineage)
+                title = title.replace(" ", "_")
+                f.write(">{}\n{}\n".format(title, rec["seq"]))       
     def taxonomy_assign(self, src, des, input_format='fastq', ref_db="Fungi_ITS", 
                         mmseqs="/nanoact/bin/mmseqs", 
                         custom_db = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
+                        custom_gbff = [],
                         evalue_thres=1e-80,
         ):
         if True: #Debug switch, rebuild the database takes time
