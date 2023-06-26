@@ -1725,36 +1725,32 @@ class NanoAct():
                 #mmseqs easy-search
                 self._exec(f"{mmseqs} easy-search {query} {db} {des}/{SampleID}.m8 {self.TEMP}/tmp --search-type 3 -a -s 7.5", 
                         suppress_output=False)
-        for f in os.scandir(des):
-            if not f.name.endswith(".m8"):
-                continue
-            print("Processing file: ", f.name)
-            SampleID, ext = os.path.splitext(f.name)
-            #Parse m8 file
-            m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
-            m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
-            #Remove duplicate qseqid, only preserve the hightest evalue
-            m8_df = m8_df.sort_values(by=['qseqid', 'evalue'])
-            m8_df = m8_df.drop_duplicates(subset=['qseqid'], keep='first')
-            for index, row in m8_df.iterrows():
-                if row["evalue"] > evalue_thres:
-                    #Set to Unclassified if evalue > evalue_thres
-                    m8_df.loc[index, "kingdom"] = "Unclassified"
-                    m8_df.loc[index, "phylum"] = "Unclassified"
-                    m8_df.loc[index, "class"] = "Unclassified"
-                    m8_df.loc[index, "order"] = "Unclassified"
-                    m8_df.loc[index, "family"] = "Unclassified"
-                    m8_df.loc[index, "genus"] = "Unclassified"
-                else:
-                    lineage = row['sseqid'].split('||')[2].split(';')
-                    m8_df.loc[index, "kingdom"] = lineage[0]
-                    m8_df.loc[index, "phylum"] = lineage[1]
-                    m8_df.loc[index, "class"] = lineage[2]
-                    m8_df.loc[index, "order"] = lineage[3]
-                    m8_df.loc[index, "family"] = lineage[4]
-                    m8_df.loc[index, "genus"] = lineage[5]       
-            #Write to csv
-            m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
+                #Parse m8 file
+                print("Processing m8 file: ", f.name)
+                m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
+                m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
+                #Remove duplicate qseqid, only preserve the hightest evalue
+                m8_df = m8_df.sort_values(by=['qseqid', 'evalue'])
+                m8_df = m8_df.drop_duplicates(subset=['qseqid'], keep='first')
+                for index, row in m8_df.iterrows():
+                    if row["evalue"] > evalue_thres:
+                        #Set to Unclassified if evalue > evalue_thres
+                        m8_df.loc[index, "kingdom"] = "Unclassified"
+                        m8_df.loc[index, "phylum"] = "Unclassified"
+                        m8_df.loc[index, "class"] = "Unclassified"
+                        m8_df.loc[index, "order"] = "Unclassified"
+                        m8_df.loc[index, "family"] = "Unclassified"
+                        m8_df.loc[index, "genus"] = "Unclassified"
+                    else:
+                        lineage = row['sseqid'].split('||')[2].split(';')
+                        m8_df.loc[index, "kingdom"] = lineage[0]
+                        m8_df.loc[index, "phylum"] = lineage[1]
+                        m8_df.loc[index, "class"] = lineage[2]
+                        m8_df.loc[index, "order"] = lineage[3]
+                        m8_df.loc[index, "family"] = lineage[4]
+                        m8_df.loc[index, "genus"] = lineage[5]       
+                #Write to csv
+                m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
                     
     def taxonomy_assign_visualizer(self, src, des, minimal_reads=1):
         from sankeyflow import Sankey
