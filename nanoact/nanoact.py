@@ -1778,7 +1778,7 @@ class NanoAct():
                 #Write to csv
                 m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
                     
-    def taxonomy_assign_visualizer(self, src, des, minimal_reads=1):
+    def taxonomy_assign_visualizer(self, src, des, minimal_reads=1,vertical_scale=1):
         from sankeyflow import Sankey
         for f in os.scandir(src):
             if f.name.endswith("_taxonomyassignment.csv"):
@@ -1897,7 +1897,7 @@ class NanoAct():
             #Preparing Sankey Diagram
             #Estimate fig size by the max number of vertical nodes (Mostly at genus level)
             max_nodes = max([len(e) for e in nodes])
-            fig, ax = plt.subplots(1,1,figsize=(30, max(max_nodes/1.8,10)))
+            fig, ax = plt.subplots(1,1,figsize=(30, max(max_nodes/2*vertical_scale,10)))
             s = Sankey(flows=flows, 
                     nodes=nodes,
                     flow_color_mode='source',
