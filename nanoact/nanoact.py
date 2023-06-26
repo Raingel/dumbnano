@@ -1749,7 +1749,11 @@ class NanoAct():
                         suppress_output=False)
                 #Parse m8 file
                 print("Processing m8 file: ", f.name)
-                m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
+                try:
+                    m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
+                except Exception as e:
+                    print(f"Error: {f.name} m8 file load failed.")
+                    continue
                 m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
                 #Remove duplicate qseqid, only preserve the hightest evalue
                 m8_df = m8_df.sort_values(by=['qseqid', 'evalue'])
