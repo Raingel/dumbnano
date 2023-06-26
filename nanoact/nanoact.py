@@ -1624,7 +1624,6 @@ class NanoAct():
         print(f"Downloading {name} database from NCBI refseq ftp...")
         r = get(gbff_URI, allow_redirects=True)
         open(f"{des}/{name}", 'wb').write(r.content)
-        name, _ = os.path.splitext(name)
         if name.endswith(".gz"):
             #Extract gbff.gz
             print("Extracting gbff.gz file...")
@@ -1632,7 +1631,7 @@ class NanoAct():
                 with open(f"{des}/{basename}", 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
             #Delete gbff.gz
-            os.remove(f"{des}/{name}.gz")
+            os.remove(f"{des}/{name}")
             return f"{des}/{basename}"
         else:
             return f"{des}/{name}"
