@@ -1670,6 +1670,18 @@ class NanoAct():
                         ref_db = ['fungi.ITS','bacteria.16SrRNA'],
                         evalue_thres=1e-80,
         ):
+        """
+        Available ref_db:
+        archaea.16SrRNA
+        archaea.23SrRNA
+        archaea.5SrRNA
+        bacteria.16SrRNA
+        bacteria.23SrRNA
+        bacteria.5SrRNA
+        fungi.18SrRNA
+        fungi.28SrRNA
+        fungi.ITS
+        """
         try:
             os.mkdir(des)
         except:
