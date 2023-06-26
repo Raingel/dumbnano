@@ -1667,6 +1667,7 @@ class NanoAct():
                         input_format='fastq',
                         custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
                         custom_gbff = [],
+                        ref_db = ['fungi.ITS','bacteria.16SrRNA'],
                         evalue_thres=1e-80,
         ):
         try:
@@ -1703,10 +1704,19 @@ class NanoAct():
             #Merge custom_fas and fas.gz in refdb folder into /temp/ref_db.fas
             print("Merging custom database and ref_db...")
             with open(f"{self.TEMP}/ref_db.fas", 'w') as handle:
-                for f in os.scandir(lib+"/refdb"):
-                    if f.is_file() and f.name.endswith(".fas.gz"):
-                        with gzip.open(f.path, 'rb') as f_in:
-                            handle.write(f_in.read().decode())
+                #Load ref_db
+                for r in ref_db:
+                    try:
+                        with open(f"{lib}/refdb/{r}.fas.gz", 'r') as f:
+                            handle.write(f.read())
+                    except:
+                        print(f"Warning: {r}.fas.gz not found in refdb folder, skipped.")
+                #Load custom_db
+                for f in custom_fas:
+                    with open(f, 'r') as f:
+                        handle.write(f.read())
+                
+
             mmseqs = f"{lib}/bin/mmseqs"
             for f in os.scandir(src):
                 SampleID, ext = os.path.splitext(f.name)
