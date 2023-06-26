@@ -1719,10 +1719,10 @@ class NanoAct():
                 #Load ref_db
                 for r in ref_db:
                     try:
-                        with open(f"{lib}/refdb/{r}.fas.gz", 'r') as f:
-                            handle.write(f.read())
-                    except:
-                        print(f"Warning: {r}.fas.gz not found in refdb folder, skipped.")
+                        with gzip.open(f"{lib}/refdb/{r}.fas.gz", 'rb') as f:
+                            handle.write(f.read().decode('utf-8'))
+                    except Exception as e:
+                        print(f"Error: {r}.fas.gz load failed.")
                 #Load custom_db
                 for f in custom_fas:
                     with open(f, 'r') as f:
