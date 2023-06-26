@@ -1938,6 +1938,6 @@ class NanoAct():
             ax.set_title(f"{SampleID} Taxonomic Assignment",fontsize=25)
             s.draw(ax=ax)
             #Save the figure
-            plt.savefig(f"{des}/{SampleID}_sankey.png", dpi=300, bbox_inches='tight')
+            plt.savefig(f"{des}/{SampleID}_sankey.svg", dpi=300, bbox_inches='tight')
             #plt.close(fig)
 # %%
