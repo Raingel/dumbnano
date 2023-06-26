@@ -24,9 +24,11 @@ class NanoAct():
         self.TEMP = TEMP
         self.fasta_ext = ['.fasta','.fa','.fas']
         self.fastq_ext = ['.fastq']
+        self.lib_path = os.path.dirname(os.path.realpath(__file__))
+        self.tax_id_cache = f"{self.lib_path}/taxid_cache/taxid_cache.json"
     def _lib_path(self):
         #get the path of the library
-        return os.path.dirname(os.path.realpath(__file__))
+        return self.lib_path
     def _exec(self, cmd,suppress_output=True):
         if suppress_output:
             with open(os.devnull, 'w') as DEVNULL:
@@ -1586,8 +1588,26 @@ class NanoAct():
                 data = {}    
             line = handle.readline()
     def _lineage_by_taxid(self, taxid=['3016022', '2888342']):
+        #try load tax_id_cache from cache file
+        ranks = {} 
+        try:
+            taxid_json = json.load(open(self.tax_id_cache, 'r'))
+        except:
+            taxid_json = {}
+        #Add requested taxid to ranks if it is in cache
+        #And remove it from taxid list
+        new_taxid = []
+        for t in taxid:
+            if t in taxid_json:
+                ranks[t] = taxid_json[t]
+            else:
+                new_taxid.append(t)
+        #If all taxid are in cache, return ranks
+        if len(new_taxid) == 0:
+            return ranks
+        
         # Get taxon info by taxid
-        taxid_info_URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&rettype=xml&id={}'.format(",".join(taxid))
+        taxid_info_URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&rettype=xml&id={}'.format(",".join(new_taxid))
         r = get(taxid_info_URI)
         try:
             r = xmltodict.parse(r.text)
@@ -1595,7 +1615,6 @@ class NanoAct():
             print(taxid_info_URI)
             print(r.text)
             return None
-        ranks = {} 
         rank_base = {"kingdom":"incertae sedis", "phylum":"incertae sedis", "class":"incertae sedis", "order":"incertae sedis", "family":"incertae sedis", "genus":"incertae sedis"}
         try:
             #If there is only one taxid, the result will be a dict
@@ -1610,10 +1629,15 @@ class NanoAct():
                     if i['Rank'] in rank.keys():
                         rank[i['Rank']] = i['ScientificName']
                 ranks[query['TaxId']] = rank
+                #Save taxid info to cache
+                taxid_json[query['TaxId']] = rank
                 
         except Exception as e:
-            print(e)
+            print(taxid_info_URI)
+            print(r, e)
             pass
+        #Save taxid info to cache
+        json.dump(taxid_json, open(self.tax_id_cache, 'w'))
         return ranks
     
     def _gbffgz_download(self,gbff_URI, des):
@@ -1657,7 +1681,7 @@ class NanoAct():
                 try:
                     lineage = ";".join([taxinfos[rec["taxid"]][i] for i in ["kingdom", "phylum", "class", "order", "family", "genus"]])
                 except Exception as e:
-                    lineage = "Unclassified"
+                    lineage = ";".join(["Unclassified"]*6)
                 title = "{}||{}||{}".format(rec["accession"], rec["organism"], lineage)
                 title = title.replace(" ", "_")
                 f.write(">{}\n{}\n".format(title, rec["seq"]))  
@@ -1747,7 +1771,7 @@ class NanoAct():
                 self._exec(f"{mmseqs} easy-search {query} {db} {des}/{SampleID}.m8 {self.TEMP}/tmp --search-type 3 -a -s 7.5", 
                         suppress_output=False)
                 #Parse m8 file
-                print("Processing m8 file: ", f.name)
+                print(f"Processing m8 file: {des}/{SampleID}.m8")
                 try:
                     m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
                 except Exception as e:
