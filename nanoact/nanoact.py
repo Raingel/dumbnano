@@ -1847,8 +1847,8 @@ class NanoAct():
                 #Parse lca result to tsv
                 self._exec(f"{mmseqs} createtsv {self.TEMP}/{SampleID}_query_db  {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResult.tsv", suppress_output=False)
                 #Parse tsv file to produce report
-                self._exec(f"{mmseqs} taxonomyreport {des}/{SampleID}_taxonomyResult.tsv {des}/{SampleID}_taxonomyResultReport", suppress_output=False)
-                self._exec(f"{mmseqs} taxonomyreport {des}/{SampleID}_taxonomyResult.tsv {des}/{SampleID}_taxonomyResultReport.html --report-mode 1", suppress_output=False)
+                self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport", suppress_output=False)
+                self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport.html --report-mode 1", suppress_output=False)
                 
     def taxonomy_assign_visualizer(self, src, des, minimal_reads=1,vertical_scale=1):
         from sankeyflow import Sankey
