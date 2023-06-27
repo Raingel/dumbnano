@@ -17,7 +17,7 @@ from collections import Counter
 import urllib.parse
 import time
 from random import random
-
+import tarfile
 # %%
 class NanoAct():
     def __init__(self, TEMP = './temp/'):
@@ -1688,10 +1688,13 @@ class NanoAct():
         return f"{des}/{name}.fas"     
     def taxonomy_assign(self, src, des, 
                         input_format='fastq',
+                        mode='easy-search', #easy-search or lca 
+                        lca_mode = 3, 
                         custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
                         custom_gbff = [],
                         ref_db = ['fungi.ITS','bacteria.16SrRNA'],
                         evalue_thres=1e-80,
+                        simi_thres=0.8,
         ):
         """
         Available ref_db:
@@ -1705,6 +1708,8 @@ class NanoAct():
         fungi.28SrRNA
         fungi.ITS
         """
+        if mode not in ['easy-search', 'lca']:
+            raise ValueError("mode must be 'easy-search' or 'lca'")
         try:
             os.mkdir(des)
         except:
@@ -1734,15 +1739,14 @@ class NanoAct():
                     custom_fas.append(fas)
 
 
-            #Use easy-search to do taxonomy assignment
-            lib = os.path.dirname(os.path.realpath(__file__))
-            #Merge custom_fas and fas.gz in refdb folder into /temp/ref_db.fas
+            
+            #Merge custom_fas and fas.gz in refdb folder into {self.TEMP}/ref_db.fas
             print("Merging custom database and ref_db...")
             with open(f"{self.TEMP}/ref_db.fas", 'w') as handle:
                 #Load ref_db
                 for r in ref_db:
                     try:
-                        with gzip.open(f"{lib}/refdb/{r}.fas.gz", 'rb') as f:
+                        with gzip.open(f"{self.lib_path}/refdb/{r}.fas.gz", 'rb') as f:
                             handle.write(f.read().decode('utf-8'))
                     except Exception as e:
                         print(f"Error: {r}.fas.gz load failed.")
@@ -1750,9 +1754,43 @@ class NanoAct():
                 for f in custom_fas:
                     with open(f, 'r') as f:
                         handle.write(f.read())
-                
 
-            mmseqs = f"{lib}/bin/mmseqs"
+            #Binary path
+            mmseqs = f"{self.lib_path}/bin/mmseqs"
+
+            #if mode == 'lca', taxdump and ref_db must be prepared
+            if mode == 'lca':
+                #build db
+                self._exec(f'{mmseqs} createdb {self.TEMP}/ref_db.fas {self.TEMP}/ref_db', suppress_output=True)
+                #Edit lookup table to include taxonomic information
+                with open(f"{self.TEMP}/ref_db.lookup", "r") as f:
+                    lines = f.readlines()
+                #Overwrite lookup table
+                with open(f"{self.TEMP}/ref_db.taxidmapping", "w") as f:
+                    for line in lines:
+                        ele = line.split('	')
+                        tax_id = ele[1].split('||')[-1]
+                        #Delete first element
+                        ele[2] = tax_id
+                        del ele[0]
+                        f.write('	'.join(ele)+"\n")  
+                #Download taxdump which contains taxonomic information from NCBI
+                taxdump_URI = "https://ftp.ncbi.nih.gov/pub/taxonomy/taxdump.tar.gz"
+                try:
+                    os.makedirs(f"{self.TEMP}/ncbi-taxdump")
+                except Exception as e:
+                    pass
+                with open("{self.TEMP}/ncbi-taxdump/taxdump.tar.gz", "wb") as f:
+                    response = get(taxdump_URI)
+                    f.write(response.content)
+                #Extract taxdump
+                with tarfile.open(f"{self.TEMP}/ncbi-taxdump/taxdump.tar.gz", "r:gz") as tar:
+                    tar.extractall(path=f"{self.TEMP}/ncbi-taxdump")
+                #Create taxonomic database with createtaxdb
+                self._exec(f"{mmseqs} createtaxdb {self.TEMP}/ref_db tmp --ncbi-tax-dump {self.TEMP}/ncbi-taxdump/ --tax-mapping-file {self.TEMP}/ref_db.taxidmapping",
+                            suppress_output=False)
+
+            #Start taxonomy assignment
             for f in os.scandir(src):
                 SampleID, ext = os.path.splitext(f.name)
                 if input_format == 'fasta' and ext in  self.fasta_ext:
@@ -1762,44 +1800,56 @@ class NanoAct():
                 else:
                     continue
                 print("Processing file: ", f.name)
+                #Prepare query and db file
                 query = f"{self.TEMP}/query.fas"
                 db = f"{self.TEMP}/ref_db.fas"
                 with open(query, 'w') as f:
                     for seq in seqs:
                         f.write(">{}\n{}\n".format(seq["title"], seq["seq"]))
                 #mmseqs easy-search
-                self._exec(f"{mmseqs} easy-search {query} {db} {des}/{SampleID}.m8 {self.TEMP}/tmp --search-type 3 -a -s 7.5", 
-                        suppress_output=False)
-                #Parse m8 file
-                print(f"Processing m8 file: {des}/{SampleID}.m8")
-                try:
-                    m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
-                except Exception as e:
-                    print(f"Error: {f.name} m8 file load failed.")
-                    continue
-                m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
-                #Remove duplicate qseqid, only preserve the hightest evalue
-                m8_df = m8_df.sort_values(by=['qseqid', 'evalue'])
-                m8_df = m8_df.drop_duplicates(subset=['qseqid'], keep='first')
-                for index, row in m8_df.iterrows():
-                    if row["evalue"] > evalue_thres:
-                        #Set to Unclassified if evalue > evalue_thres
-                        m8_df.loc[index, "kingdom"] = "Unclassified"
-                        m8_df.loc[index, "phylum"] = "Unclassified"
-                        m8_df.loc[index, "class"] = "Unclassified"
-                        m8_df.loc[index, "order"] = "Unclassified"
-                        m8_df.loc[index, "family"] = "Unclassified"
-                        m8_df.loc[index, "genus"] = "Unclassified"
-                    else:
-                        lineage = row['sseqid'].split('||')[2].split(';')
-                        m8_df.loc[index, "kingdom"] = lineage[0]
-                        m8_df.loc[index, "phylum"] = lineage[1]
-                        m8_df.loc[index, "class"] = lineage[2]
-                        m8_df.loc[index, "order"] = lineage[3]
-                        m8_df.loc[index, "family"] = lineage[4]
-                        m8_df.loc[index, "genus"] = lineage[5]       
-                #Write to csv
-                m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
+                if mode == 'easy-search':
+                    self._exec(f"{mmseqs} easy-search {query} {db} {des}/{SampleID}.m8 {self.TEMP}/tmp --search-type 3 -a -s 7.5", 
+                            suppress_output=False)
+                    #Parse m8 file
+                    print(f"Processing m8 file: {des}/{SampleID}.m8")
+                    try:
+                        m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
+                    except Exception as e:
+                        print(f"Error: {f.name} m8 file load failed.")
+                        continue
+                    m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
+                    #Remove duplicate qseqid, only preserve the hightest evalue
+                    m8_df = m8_df.sort_values(by=['qseqid', 'evalue'])
+                    m8_df = m8_df.drop_duplicates(subset=['qseqid'], keep='first')
+                    for index, row in m8_df.iterrows():
+                        if row["evalue"] > evalue_thres:
+                            #Set to Unclassified if evalue > evalue_thres
+                            m8_df.loc[index, "kingdom"] = "Unclassified"
+                            m8_df.loc[index, "phylum"] = "Unclassified"
+                            m8_df.loc[index, "class"] = "Unclassified"
+                            m8_df.loc[index, "order"] = "Unclassified"
+                            m8_df.loc[index, "family"] = "Unclassified"
+                            m8_df.loc[index, "genus"] = "Unclassified"
+                        else:
+                            lineage = row['sseqid'].split('||')[2].split(';')
+                            m8_df.loc[index, "kingdom"] = lineage[0]
+                            m8_df.loc[index, "phylum"] = lineage[1]
+                            m8_df.loc[index, "class"] = lineage[2]
+                            m8_df.loc[index, "order"] = lineage[3]
+                            m8_df.loc[index, "family"] = lineage[4]
+                            m8_df.loc[index, "genus"] = lineage[5]       
+                    #Write to csv
+                    m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
+                elif mode == 'lca':
+                    #Create query db
+                    self._exec(f"{mmseqs} createdb {query} {self.TEMP}/{SampleID}_query_db", suppress_output=False)
+                    #Run lca
+                    self._exec(f"{mmseqs} taxonomy {self.TEMP}/{SampleID}_query_db {des}/{SampleID}_taxonomyResult tmp --search-type 3 --lca-mode {lca_mode}")
+                    #Parse lca result to tsv
+                    self._exec(f"{mmseqs} createtsv {self.TEMP}/{SampleID}_query_db  {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResult.tsv")
+                    #Parse tsv file to produce report
+                    self._exec(f"{mmseqs} taxonomyreport {des}/{SampleID}_taxonomyResult.tsv {des}/{SampleID}_taxonomyResultReport")
+                    self._exec(f"{mmseqs} taxonomyreport {des}/{SampleID}_taxonomyResult.tsv {des}/{SampleID}_taxonomyResultReport.html --report-mode 1")
                     
     def taxonomy_assign_visualizer(self, src, des, minimal_reads=1,vertical_scale=1):
         from sankeyflow import Sankey
