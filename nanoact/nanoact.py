@@ -1682,7 +1682,7 @@ class NanoAct():
                     lineage = ";".join([taxinfos[rec["taxid"]][i] for i in ["kingdom", "phylum", "class", "order", "family", "genus"]])
                 except Exception as e:
                     lineage = ";".join(["Unclassified"]*6)
-                title = "{}||{}||{}".format(rec["accession"], rec["organism"], lineage)
+                title = "{}||{}||{}||{}".format(rec["accession"], rec["organism"], lineage, rec["taxid"])
                 title = title.replace(" ", "_")
                 f.write(">{}\n{}\n".format(title, rec["seq"]))  
         return f"{des}/{name}.fas"     
