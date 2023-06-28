@@ -1868,6 +1868,7 @@ class NanoAct():
                 SampleID, _ = os.path.splitext(f.name)
             else:
                 continue
+            print("Processing file: ", f.name)
             result_df_raw = pd.read_csv(result_tsv, sep="\t", header=None)
             #Group by second column and count
             result_df = result_df_raw.groupby(result_df_raw.columns[1]).count()
@@ -1973,7 +1974,7 @@ class NanoAct():
             ax.axis("off")
             #Save to file
             fig.savefig(f"{des}/{SampleID}.{img_ext}", bbox_inches='tight')
-            return None
+        return {des}
     def taxonomy_assign_visualizer(self, src, des, minimal_reads=1,vertical_scale=0.8):
         from sankeyflow import Sankey
         for f in os.scandir(src):
