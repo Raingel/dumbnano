@@ -1723,6 +1723,10 @@ class NanoAct():
         #Clean temp folder
         self._clean_temp()
         custom_fas = []
+        try:
+            os.mkdir(des)
+        except:
+            pass
         #Download custom_db
         if custom_acc != []:
             print("Downloading custom database from NCBI...")
