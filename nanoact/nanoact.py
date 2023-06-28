@@ -1859,116 +1859,121 @@ class NanoAct():
                 #Parse tsv file to produce report
                 self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport", suppress_output=False)
                 self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport.html --report-mode 1", suppress_output=False)
-                #Parse tsv file to produce sankey
-                self.custom_taxonomy_sankey(f"{des}/{SampleID}_taxonomyResult.tsv", f"{des}/{SampleID}_taxonomyResultSankey.png")
-    def custom_taxonomy_sankey(self, result_tsv, des_img, minimal_reads=1,vertical_scale=1):  
+
+    def custom_taxonomy_sankey(self, src, des, img_ext = "png", minimal_reads=1,vertical_scale=1):  
         from sankeyflow import Sankey
-        result_df_raw = pd.read_csv(result_tsv, sep="\t", header=None)
-        #Group by second column and count
-        result_df = result_df_raw.groupby(result_df_raw.columns[1]).count()
-        #Flatten df
-        result_df = result_df.reset_index()
-        #Remove where taxid = 0 which means unclassified
-        if 0 in result_df[1].tolist():
-            unclassified_count = result_df[result_df[1] == 0][0].sum()
-        else:
-            unclassified_count = 0
-        result_df = result_df[result_df[1] != 0]
-        #Get tax_id rank pair from result_df_raw
-        tax_id_rank = result_df_raw[[1,2]].drop_duplicates()
-        #Convert to dict
-        tax_id_rank = tax_id_rank.set_index(1).to_dict()[2]
-        #Get tax_id list as string
-        tax_id = result_df[1].astype(str).tolist()
-        tax_id_count = result_df[0].tolist()
-        #Get lineage of each taxid, 100 query per request
-        tax_id_lineage = {}
-        for i in range(0, len(tax_id), 100):
-            tax_id_lineage.update(self._lineage_by_taxid(tax_id[i:i+100]))
-        RANK = ["kingdom","phylum","class","order","family","genus"]
-        RANK_COLOR = [(255/255, 183/255, 178/255, 0.5), 
-            (205/255, 220/255, 57/255, 0.5), 
-            (100/255, 181/255, 246/255, 0.5), 
-            (255/255, 241/255, 118/255, 0.5), 
-            (255/255, 138/255, 101/255, 0.5), 
-            (171/255, 71/255, 188/255, 0.5)]
-        #Add lineage on result_df_raw
-        result_df_raw[RANK] = result_df_raw[1].astype(str).apply(lambda x: pd.Series(tax_id_lineage.get(x, {r: "" for r in RANK})))
-        #Add frequency column for each rank
-        for r in RANK:
-            result_df_raw[r+"_freq"] = result_df_raw[r].map(result_df_raw[r].value_counts())
-        #Sort by freq of each rank
-        result_df_raw = result_df_raw.sort_values(by=[r+"_freq" for r in RANK], ascending=False)
-        flow_st = []
-        flow_count = []
-        node_label = []
-        node_count = []
-        for index, row in result_df_raw.iterrows():
-            identified_rank = row[2]
-            for r_no, r in enumerate(RANK):
-                if r_no + 1 == len(RANK):
-                    break
-                #If identified rank reached, stop
-                if r == identified_rank:
-                    break
-                src_rank = RANK[r_no]
-                tar_rank = RANK[r_no+1]
-                #If empty, skip
-                if row[tar_rank] == "":
-                    continue
-                src = f"{src_rank}_{row[src_rank]}"
-                tar = f"{tar_rank}_{row[tar_rank]}"
-                #build flow
-                st = (src, tar)
-                if st not in flow_st:
-                    flow_st.append(st)
-                    flow_count.append(1)
-                else:
-                    flow_count[flow_st.index(st)] += 1
-                #build node
-                if src not in node_label:
-                    node_label.append(src)
-                    node_count.append(1)
-                else:
-                    node_count[node_label.index(src)] += 1
-                #for last rank, they will not be as source
-                if r_no + 2 == len(RANK) or tar_rank == identified_rank:
-                    if tar not in node_label:
-                        node_label.append(tar)
+        for f in os.scandir(src):
+            if f.name.endswith("_taxonomyResult.tsv"):
+                result_tsv = f.path
+                SampleID, _ = os.path.splitext(f.name)
+            else:
+                continue
+            result_df_raw = pd.read_csv(result_tsv, sep="\t", header=None)
+            #Group by second column and count
+            result_df = result_df_raw.groupby(result_df_raw.columns[1]).count()
+            #Flatten df
+            result_df = result_df.reset_index()
+            #Remove where taxid = 0 which means unclassified
+            if 0 in result_df[1].tolist():
+                unclassified_count = result_df[result_df[1] == 0][0].sum()
+            else:
+                unclassified_count = 0
+            result_df = result_df[result_df[1] != 0]
+            #Get tax_id rank pair from result_df_raw
+            tax_id_rank = result_df_raw[[1,2]].drop_duplicates()
+            #Convert to dict
+            tax_id_rank = tax_id_rank.set_index(1).to_dict()[2]
+            #Get tax_id list as string
+            tax_id = result_df[1].astype(str).tolist()
+            tax_id_count = result_df[0].tolist()
+            #Get lineage of each taxid, 100 query per request
+            tax_id_lineage = {}
+            for i in range(0, len(tax_id), 100):
+                tax_id_lineage.update(self._lineage_by_taxid(tax_id[i:i+100]))
+            RANK = ["kingdom","phylum","class","order","family","genus"]
+            RANK_COLOR = [(255/255, 183/255, 178/255, 0.5), 
+                (205/255, 220/255, 57/255, 0.5), 
+                (100/255, 181/255, 246/255, 0.5), 
+                (255/255, 241/255, 118/255, 0.5), 
+                (255/255, 138/255, 101/255, 0.5), 
+                (171/255, 71/255, 188/255, 0.5)]
+            #Add lineage on result_df_raw
+            result_df_raw[RANK] = result_df_raw[1].astype(str).apply(lambda x: pd.Series(tax_id_lineage.get(x, {r: "" for r in RANK})))
+            #Add frequency column for each rank
+            for r in RANK:
+                result_df_raw[r+"_freq"] = result_df_raw[r].map(result_df_raw[r].value_counts())
+            #Sort by freq of each rank
+            result_df_raw = result_df_raw.sort_values(by=[r+"_freq" for r in RANK], ascending=False)
+            flow_st = []
+            flow_count = []
+            node_label = []
+            node_count = []
+            for index, row in result_df_raw.iterrows():
+                identified_rank = row[2]
+                for r_no, r in enumerate(RANK):
+                    if r_no + 1 == len(RANK):
+                        break
+                    #If identified rank reached, stop
+                    if r == identified_rank:
+                        break
+                    src_rank = RANK[r_no]
+                    tar_rank = RANK[r_no+1]
+                    #If empty, skip
+                    if row[tar_rank] == "":
+                        continue
+                    src = f"{src_rank}_{row[src_rank]}"
+                    tar = f"{tar_rank}_{row[tar_rank]}"
+                    #build flow
+                    st = (src, tar)
+                    if st not in flow_st:
+                        flow_st.append(st)
+                        flow_count.append(1)
+                    else:
+                        flow_count[flow_st.index(st)] += 1
+                    #build node
+                    if src not in node_label:
+                        node_label.append(src)
                         node_count.append(1)
                     else:
-                        node_count[node_label.index(tar)] += 1
-        #Build Sankey format
-        sankey_flow = [(st[0],st[1],c,
-                        {"color": RANK_COLOR[RANK.index(st[0].split("_")[0])]})
-                       for st,c in zip(flow_st,flow_count) 
-                       ]
-        sankey_node = [[] for _ in RANK]
-        for n, c in zip(node_label, node_count):
-            r = n.split("_")[0]
-            r_no = RANK.index(r)
-            sankey_node[r_no].append((n,c,{"color": "grey"}))
-        #Remove count < minimal_reads
-        sankey_flow = [f for f in sankey_flow if f[2] >= minimal_reads]
-        sankey_node = [[n for n in r if n[1] >= minimal_reads] for r in sankey_node]
-        #return sankey_flow
-        genus_count = len(sankey_node[-1])
-        fig,ax = plt.subplots(figsize=(30,0.8*genus_count*vertical_scale))
-        s = Sankey(flows=sankey_flow, 
-        nodes=sankey_node,
-        flow_color_mode='source',
-        node_opts=dict(
-                        label_format='{label} ({value:.0f})',
-                        label_opts=dict(fontsize=16),
-                        label_pos='right',
-                        ),
-        label_pad_x = 10,
-        scale=0.1)
-        s.draw(ax=ax)
-        ax.axis("off")
-        #Save to file
-        fig.savefig(des, bbox_inches='tight')
-        return None
+                        node_count[node_label.index(src)] += 1
+                    #for last rank, they will not be as source
+                    if r_no + 2 == len(RANK) or tar_rank == identified_rank:
+                        if tar not in node_label:
+                            node_label.append(tar)
+                            node_count.append(1)
+                        else:
+                            node_count[node_label.index(tar)] += 1
+            #Build Sankey format
+            sankey_flow = [(st[0],st[1],c,
+                            {"color": RANK_COLOR[RANK.index(st[0].split("_")[0])]})
+                        for st,c in zip(flow_st,flow_count) 
+                        ]
+            sankey_node = [[] for _ in RANK]
+            for n, c in zip(node_label, node_count):
+                r = n.split("_")[0]
+                r_no = RANK.index(r)
+                sankey_node[r_no].append((n,c,{"color": "grey"}))
+            #Remove count < minimal_reads
+            sankey_flow = [f for f in sankey_flow if f[2] >= minimal_reads]
+            sankey_node = [[n for n in r if n[1] >= minimal_reads] for r in sankey_node]
+            #return sankey_flow
+            genus_count = len(sankey_node[-1])
+            fig,ax = plt.subplots(figsize=(30,0.8*genus_count*vertical_scale))
+            s = Sankey(flows=sankey_flow, 
+            nodes=sankey_node,
+            flow_color_mode='source',
+            node_opts=dict(
+                            label_format='{label} ({value:.0f})',
+                            label_opts=dict(fontsize=16),
+                            label_pos='right',
+                            ),
+            label_pad_x = 10,
+            scale=0.1)
+            s.draw(ax=ax)
+            ax.axis("off")
+            #Save to file
+            fig.savefig(f"{des}/{SampleID}.{img_ext}", bbox_inches='tight')
+            return None
     def taxonomy_assign_visualizer(self, src, des, minimal_reads=1,vertical_scale=0.8):
         from sankeyflow import Sankey
         for f in os.scandir(src):
