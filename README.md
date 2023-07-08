@@ -15,20 +15,24 @@
 
 
 
-## Usage
-[combine_fastq()](#combine_fastq) 合併所有fastq檔案
+## Getting started
+    
 
-[nanofilt()](#nanofilt) 以長度、品質自fastq檔案中篩選raw reads
-
-[qualityfilt()](#qualityfilt) 以長度、品質自fastq檔案中篩選raw reads
-
-[singlebar()](#singlebar) 根據raw reads的起始端的barcode index進行序列解訊(demultiplex)
-
-[orientation()](#orientation) 根據提供的FwPrimer/RvPrimer (或其他表格內的欄位)來將raw reads轉成同一個方向
-
-[trim_reads()](#trim_reads) 將raw reads頭尾截除
+|   | method          | description |
+|---|-----------------|-------------|
+| 1 | [combine_fastq()](#combine_fastq) |  合併所有fastq檔案 |
+| 2 |[nanofilt()](#nanofilt)| 以長度、品質自fastq檔案中篩選raw reads |
+| 3 |[qualityfilt()](#qualityfilt)| 以長度、品質自fastq檔案中篩選raw reads |
+| 4 |[singlebar()](#singlebar)| 根據raw reads的起始端的barcode index進行序列解訊(demultiplex) |
+| 5 |[orientation()](#orientation)| 根據提供的FwPrimer/RvPrimer (或其他表格內的欄位)來將raw reads轉成同一個方向 |
+| 6 |[trim_reads()](#trim_reads)| 將raw reads頭尾截除 |
+| 7 |[qualityfilt()](#qualityfilt)| 以長度、品質自fastq檔案中篩選raw reads |
 
 ---
+## 一個典型的workflow
+
+---
+## 功能介紹
 ### combine_fastq
 **解壓縮及合併所有fastq.gz檔案。**
 ```mermaid
@@ -38,7 +42,7 @@ flowchart LR
     3.fastq.gz-->|Uncompress| all.fastq
     ...... -->|Uncompress| all.fastq
 ```
-<details>
+
  大部分basecalling軟體會產生許多fastq.gz檔案，本功能可以將所有fastq.gz檔案合併成一個fastq檔案。<br>
 
 	all_fastq = dumb.combine_fastq(
@@ -46,7 +50,7 @@ flowchart LR
 					des = "./des/", 
 					name = "all.fastq" 
 				)
-</details>
+
     
 ---
 ### nanofilt
@@ -63,7 +67,6 @@ qualityfilt的是由本專案設計，其單純利用每序列的平均品質分
 flowchart LR
     all.fastq-->|nanofilt/qualityfilt| all_nanofilt.fastq/all_qualityfilt.fastq
 ```
-<details> 
 	
 	all_fastq = dumb.nanofilt(src = '/content/all.fastq',
                            des = '/content/drive/MyDrive/Data/2023-000006/1_nanoflit/',
@@ -80,7 +83,6 @@ flowchart LR
                            MIN_LEN = 400, #depends on the length of your reads 
                            MAX_LEN = 7000 #depends on the length of your reads
 			   )
-</details>
 
 
 ---
@@ -95,7 +97,6 @@ flowchart LR
 	all.fastq-->|singlebar| ...
 ```
 
-<details> 
 	
 	demultiplex = dumb.singlebar(
  				      #src: 輸入檔案，通常是經過qualityfilt處理的raw reads
@@ -118,7 +119,6 @@ flowchart LR
 		                      #output_format: 輸出檔案的格式，預設為both。可以是fastq或是fasta。both代表同時輸出fastq和fasta。
 		                    output_format = "both",
                     )
-</details> 
 
 ---
 ### orientation
@@ -128,8 +128,7 @@ flowchart LR
 flowchart LR
 	SampleID_1.fastq/SampleID_1.fas-->|orientation| SampleID_1.fastq/SampleID_1.fas
 ```
-
-<details> 
+ 
 	
 	#取出raw reads的前search_range長度的序列。並將其分別與FwPrimer及RvPrimer做align。若與FwPrimer較相近則代表此read為正股，反之則為反股
 	orientation = dumb.orientation(
@@ -150,7 +149,6 @@ flowchart LR
 		                      #output_format: 輸出檔案的格式，預設為both。可以是fastq或是fasta。both代表同時輸出fastq和fasta。
 		                    output_format = "both",
                     )
-</details> 
 
 ---
 ### trim_reads
@@ -161,7 +159,6 @@ flowchart LR
 	SampleID_1.fastq/SampleID_1.fas-->|orientation| SampleID_1.fastq/SampleID_1.fas
 ```
 
-<details> 
 
 	dumb.trim_reads (
 			  #src: 輸入檔案的資料夾位置
@@ -201,6 +198,6 @@ flowchart LR
 
 
 	                )
-</details> 
+
 
 
