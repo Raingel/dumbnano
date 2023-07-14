@@ -1,0 +1,52 @@
+100.0000	54	0	no rank	1	root
+100.0000	54	0	no rank	131567	  cellular organisms
+94.4444	51	0	superkingdom	2759	    Eukaryota
+94.4444	51	0	clade	33154	      Opisthokonta
+94.4444	51	1	kingdom	4751	        Fungi
+92.5926	50	0	subkingdom	451864	          Dikarya
+87.0370	47	0	phylum	5204	            Basidiomycota
+87.0370	47	0	subphylum	5302	              Agaricomycotina
+87.0370	47	2	class	155619	                Agaricomycetes
+79.6296	43	0	subclass	452333	                  Agaricomycetidae
+79.6296	43	0	order	5338	                    Agaricales
+62.9630	34	0	suborder	2982303	                      Tricholomatineae
+62.9630	34	0	family	930979	                        Lyophyllaceae
+62.9630	34	28	genus	71927	                          Termitomyces
+7.4074	4	0	no rank	2634893	                            unclassified Termitomyces
+7.4074	4	4	species	2979700	                              Termitomyces sp. S25
+3.7037	2	2	species	71928	                            Termitomyces cylindricus
+14.8148	8	0	suborder	2982305	                      Agaricineae
+14.8148	8	0	family	34450	                        Cortinariaceae
+14.8148	8	0	genus	2973957	                          Cystinarius
+14.8148	8	8	species	2897175	                            Cystinarius rubiginosus
+1.8519	1	0	suborder	2982306	                      Pluteineae
+1.8519	1	0	family	36657	                        Pluteaceae
+1.8519	1	0	genus	36658	                          Volvariella
+1.8519	1	1	species	2576354	                            Volvariella pulla
+3.7037	2	0	no rank	355688	                  Agaricomycetes incertae sedis
+3.7037	2	0	order	5303	                    Polyporales
+3.7037	2	0	family	5317	                      Polyporaceae
+3.7037	2	0	genus	81049	                        Perenniporia
+3.7037	2	2	species	1185758	                          Perenniporia subtephropora
+5.5556	3	0	phylum	4890	            Ascomycota
+5.5556	3	0	clade	716545	              saccharomyceta
+3.7037	2	0	subphylum	147537	                Saccharomycotina
+3.7037	2	0	class	4891	                  Saccharomycetes
+3.7037	2	0	order	4892	                    Saccharomycetales
+3.7037	2	0	family	34353	                      Dipodascaceae
+3.7037	2	1	genus	4951	                        Yarrowia
+1.8519	1	1	species	1527289	                          Yarrowia yakushimensis
+1.8519	1	0	subphylum	147538	                Pezizomycotina
+1.8519	1	0	class	147549	                  Pezizomycetes
+1.8519	1	0	order	5185	                    Pezizales
+1.8519	1	0	family	5186	                      Pezizaceae
+1.8519	1	0	genus	40593	                        Peziza
+1.8519	1	1	species	1365618	                          Peziza oliviae
+5.5556	3	1	superkingdom	2	    Bacteria
+3.7037	2	0	clade	1783272	      Terrabacteria group
+3.7037	2	0	phylum	1239	        Bacillota
+3.7037	2	0	class	91061	          Bacilli
+3.7037	2	0	order	1385	            Bacillales
+3.7037	2	0	family	186817	              Bacillaceae
+3.7037	2	0	genus	1276290	                Caldibacillus
+3.7037	2	2	species	251051	                  Caldibacillus thermolactis

@@ -492,11 +492,11 @@ class NanoAct():
             # Align the forward and reverse index sequences with the beginning and end of the input sequence read, allowing for a certain number of mismatches defined by the mismatch ratio
             if FwIndex_check["editDistance"] != -1:
                 #mark found region to lower case
-                seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]].lower() + seqF[FwIndex_check["locations"][0][1]:]
+                seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]+1].lower() + seqF[FwIndex_check["locations"][0][1]+1:]
                 if RvAnchor_check["editDistance"] != -1:
                     if RvAnchor != "":
                         #If RvAnchor is set, mark found region to lower case
-                        seqR = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]].lower() + seqR[RvAnchor_check["locations"][0][1]:]
+                        seqR = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]+1].lower() + seqR[RvAnchor_check["locations"][0][1]+1:]
                     ids.append(id)
                     integrity.append(True)
                 else:
@@ -1007,6 +1007,7 @@ class NanoAct():
                     discard_no_match = False,
                     check_both_directions = True,
                     reverse_complement_rv_col = True,
+                    search_range = 200,
                     ):
         try:
             os.makedirs(des, exist_ok=True)
@@ -1076,33 +1077,44 @@ class NanoAct():
                     #Trim fw_trim from the beginning of the sequence first, then trim rv_trim from the end of the sequence
                     #And if none of fw_trim and rv_trim is found and check_both_directions is True, check the reverse complement sequence
                     #If fw_trim and rv_trim are still not found, discard the sequence if discard_no_match is True
-                    fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
+                    fw = edlib.align(fw_trim, seq_upper[:search_range]
+                                     , mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
                     if (fw['locations'] != []):
                         trimmed_F += 1
                         s['seq'] = s['seq'][fw['locations'][0][1]+1+fw_offset:]
                         seq_upper = s['seq'].upper()
-                    rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
+                    rv = edlib.align(rv_trim, seq_upper[-search_range:]
+                                     , mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
                     if (rv['locations'] != []):
                         trimmed_R += 1
-                        s['seq'] = s['seq'][:rv['locations'][0][0]-rv_offset]
+                        splice_site = len(s['seq']) - search_range + rv['locations'][0][0] - rv_offset
+                        s['seq'] = s['seq'][:splice_site]
                     #If fw_trim and rv_trim are not found, check the reverse complement sequence
                     if (fw['locations'] == []) and (rv['locations'] == []) and check_both_directions:
                         s['seq'] = self._reverse_complement(s['seq'])
                         seq_upper = s['seq'].upper()
-                        fw = edlib.align(fw_trim, seq_upper, mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
+                        fw = edlib.align(fw_trim, seq_upper[:search_range]
+                                         , mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
                         if (fw['locations'] != []):
+                            
                             trimmed_F += 1
                             s['seq'] = s['seq'][fw['locations'][0][1]+1+fw_offset:]
                             seq_upper = s['seq'].upper()
-                        rv = edlib.align(rv_trim, seq_upper, mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
+                        rv = edlib.align(rv_trim, seq_upper[-search_range:]
+                                         , mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
                         if (rv['locations'] != []):
                             trimmed_R += 1
-                            s['seq'] = s['seq'][:rv['locations'][0][0]-rv_offset]
+                            splice_site = len(s['seq']) - search_range + rv['locations'][0][0] - rv_offset
+                            s['seq'] = s['seq'][:splice_site]
                         #If fw_trim and rv_trim are still not found, discard the sequence if discard_no_match is True
                         if (fw['locations'] == []) and (rv['locations'] == []) and discard_no_match:
                             continue
                         #turn the sequence back to the original direction
                         s['seq'] = self._reverse_complement(s['seq'])
+                    #If the remaining sequence is empty, discard it
+                    if s['seq'] == "":
+                        print(f"Discarded {s['title']} due to empty sequence after trimming")
+                        continue
                     if output_format in  ["fasta", "both"]:
                         outfile_fasta.write(f">{s['title']}\n{s['seq']}\n")
                     if output_format in  ["fastq", "both"]:
@@ -1121,6 +1133,7 @@ class NanoAct():
                     discard_no_match = False,
                     check_both_directions = True,
                     reverse_complement_rv_col = True,
+                    search_range = 200,
                      ):
         #mode should either be "table" or "case"
         #if mode is "table", BARCODE_INDEX_FILE should be a tsv or csv file with columns SampleID, fw_col, rv_col
@@ -1137,6 +1150,7 @@ class NanoAct():
                               reverse_complement_rv_col=reverse_complement_rv_col,
                                input_format=input_format,
                                output_format=output_format,
+                               search_range = search_range,
                               )
         elif mode == "case":
             print("Notice: mode is set to 'case', arguments other than src, des, fw_offset, rv_offset,input_format, output_format will be ignored")
@@ -1767,7 +1781,7 @@ class NanoAct():
         #Binary path
         mmseqs = f"{self.lib_path}/bin/mmseqs"
 
-        #DEPRECATED: if mode == 'lca', taxdump and ref_db must be prepared
+        #if mode == 'lca', taxdump and ref_db must be prepared
         if mode == 'lca':
             #build db
             self._exec(f'{mmseqs} createdb {self.TEMP}/ref_db.fas {self.TEMP}/ref_db', suppress_output=True)

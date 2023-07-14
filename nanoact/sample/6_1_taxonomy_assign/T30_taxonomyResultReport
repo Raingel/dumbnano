@@ -1,0 +1,30 @@
+7.2727	4	4	no rank	0	unclassified
+92.7273	51	0	no rank	1	root
+92.7273	51	0	no rank	131567	  cellular organisms
+92.7273	51	0	superkingdom	2759	    Eukaryota
+92.7273	51	0	clade	33154	      Opisthokonta
+92.7273	51	0	kingdom	4751	        Fungi
+92.7273	51	0	subkingdom	451864	          Dikarya
+92.7273	51	0	phylum	5204	            Basidiomycota
+92.7273	51	0	subphylum	5302	              Agaricomycotina
+92.7273	51	0	class	155619	                Agaricomycetes
+67.2727	37	0	subclass	452333	                  Agaricomycetidae
+67.2727	37	0	order	5338	                    Agaricales
+67.2727	37	0	suborder	2982303	                      Tricholomatineae
+67.2727	37	0	family	930979	                        Lyophyllaceae
+67.2727	37	1	genus	71927	                          Termitomyces
+61.8182	34	0	no rank	2634893	                            unclassified Termitomyces
+47.2727	26	26	species	2979700	                              Termitomyces sp. S25
+14.5455	8	8	species	2979701	                              Termitomyces sp. S28
+3.6364	2	2	species	71928	                            Termitomyces cylindricus
+25.4545	14	0	no rank	355688	                  Agaricomycetes incertae sedis
+21.8182	12	0	order	139380	                    Hymenochaetales
+21.8182	12	0	family	40424	                      Hymenochaetaceae
+21.8182	12	0	genus	175660	                        Pyrrhoderma
+21.8182	12	12	species	2282105	                          Pyrrhoderma hainanense
+3.6364	2	0	order	452342	                    Russulales
+3.6364	2	0	family	68781	                      Lachnocladiaceae
+1.8182	1	0	genus	68782	                        Scytinostroma
+1.8182	1	1	species	68783	                          Scytinostroma alutum
+1.8182	1	0	genus	154750	                        Vararia
+1.8182	1	1	species	1314805	                          Vararia minispora

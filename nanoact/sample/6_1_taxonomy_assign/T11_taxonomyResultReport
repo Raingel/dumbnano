@@ -1,0 +1,31 @@
+100.0000	137	0	no rank	1	root
+100.0000	137	0	no rank	131567	  cellular organisms
+99.2701	136	0	superkingdom	2759	    Eukaryota
+99.2701	136	0	clade	33154	      Opisthokonta
+99.2701	136	0	kingdom	4751	        Fungi
+99.2701	136	0	subkingdom	451864	          Dikarya
+98.5401	135	0	phylum	4890	            Ascomycota
+98.5401	135	0	clade	716545	              saccharomyceta
+98.5401	135	0	subphylum	147537	                Saccharomycotina
+98.5401	135	0	class	4891	                  Saccharomycetes
+98.5401	135	0	order	4892	                    Saccharomycetales
+98.5401	135	0	clade	2916678	                      CUG-Ser1 clade
+98.5401	135	0	family	766764	                        Debaryomycetaceae
+98.5401	135	0	clade	1535325	                          Candida/Lodderomyces clade
+98.5401	135	0	genus	5475	                            Candida
+98.5401	135	135	species	5480	                              Candida parapsilosis
+0.7299	1	0	phylum	5204	            Basidiomycota
+0.7299	1	0	subphylum	5302	              Agaricomycotina
+0.7299	1	0	class	155619	                Agaricomycetes
+0.7299	1	0	subclass	452333	                  Agaricomycetidae
+0.7299	1	0	order	5338	                    Agaricales
+0.7299	1	0	suborder	2982303	                      Tricholomatineae
+0.7299	1	0	family	930979	                        Lyophyllaceae
+0.7299	1	0	genus	71927	                          Termitomyces
+0.7299	1	1	species	71928	                            Termitomyces cylindricus
+0.7299	1	0	superkingdom	2	    Bacteria
+0.7299	1	0	clade	1783257	      PVC group
+0.7299	1	0	phylum	203682	        Planctomycetota
+0.7299	1	0	class	203683	          Planctomycetia
+0.7299	1	0	order	112	            Planctomycetales
+0.7299	1	1	family	126	              Planctomycetaceae

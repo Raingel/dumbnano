@@ -1,0 +1,39 @@
+100.0000	23	0	no rank	1	root
+100.0000	23	0	no rank	131567	  cellular organisms
+100.0000	23	0	superkingdom	2759	    Eukaryota
+100.0000	23	0	clade	33154	      Opisthokonta
+100.0000	23	0	kingdom	4751	        Fungi
+100.0000	23	0	subkingdom	451864	          Dikarya
+95.6522	22	0	phylum	4890	            Ascomycota
+95.6522	22	0	clade	716545	              saccharomyceta
+86.9565	20	0	subphylum	147538	                Pezizomycotina
+86.9565	20	0	clade	716546	                  leotiomyceta
+73.9130	17	0	clade	715989	                    sordariomyceta
+73.9130	17	0	class	147550	                      Sordariomycetes
+73.9130	17	0	subclass	222543	                        Hypocreomycetidae
+73.9130	17	0	order	5592	                          Microascales
+73.9130	17	0	family	5593	                            Microascaceae
+73.9130	17	0	genus	5596	                              Pseudallescheria
+73.9130	17	17	species	70116	                                Pseudallescheria angusta
+13.0435	3	0	clade	715962	                    dothideomyceta
+13.0435	3	0	class	147541	                      Dothideomycetes
+13.0435	3	0	subclass	451867	                        Dothideomycetidae
+13.0435	3	0	order	2726946	                          Cladosporiales
+13.0435	3	0	family	452563	                            Cladosporiaceae
+13.0435	3	1	genus	5498	                              Cladosporium
+4.3478	1	1	species	643907	                                Cladosporium colombiae
+4.3478	1	1	species	887100	                                Cladosporium pseudocladosporioides
+8.6957	2	0	subphylum	147537	                Saccharomycotina
+8.6957	2	0	class	4891	                  Saccharomycetes
+8.6957	2	0	order	4892	                    Saccharomycetales
+8.6957	2	0	family	34353	                      Dipodascaceae
+8.6957	2	0	genus	4951	                        Yarrowia
+8.6957	2	2	species	1527289	                          Yarrowia yakushimensis
+4.3478	1	0	phylum	5204	            Basidiomycota
+4.3478	1	0	subphylum	5302	              Agaricomycotina
+4.3478	1	0	class	155619	                Agaricomycetes
+4.3478	1	0	no rank	355688	                  Agaricomycetes incertae sedis
+4.3478	1	0	order	139380	                    Hymenochaetales
+4.3478	1	0	family	40424	                      Hymenochaetaceae
+4.3478	1	0	genus	175660	                        Pyrrhoderma
+4.3478	1	1	species	2282108	                          Pyrrhoderma thailandicum

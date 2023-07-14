@@ -1,0 +1,33 @@
+100.0000	12	0	no rank	1	root
+100.0000	12	0	no rank	131567	  cellular organisms
+100.0000	12	0	superkingdom	2759	    Eukaryota
+100.0000	12	0	clade	33154	      Opisthokonta
+100.0000	12	0	kingdom	4751	        Fungi
+100.0000	12	0	subkingdom	451864	          Dikarya
+91.6667	11	0	phylum	5204	            Basidiomycota
+91.6667	11	0	subphylum	5302	              Agaricomycotina
+91.6667	11	0	class	155619	                Agaricomycetes
+66.6667	8	0	subclass	452333	                  Agaricomycetidae
+66.6667	8	0	order	5338	                    Agaricales
+66.6667	8	0	suborder	2982303	                      Tricholomatineae
+66.6667	8	0	family	930979	                        Lyophyllaceae
+66.6667	8	0	genus	71927	                          Termitomyces
+66.6667	8	1	no rank	2634893	                            unclassified Termitomyces
+33.3333	4	4	species	2979701	                              Termitomyces sp. S28
+25.0000	3	3	species	2979700	                              Termitomyces sp. S25
+25.0000	3	0	no rank	355688	                  Agaricomycetes incertae sedis
+25.0000	3	0	order	139380	                    Hymenochaetales
+16.6667	2	0	family	40424	                      Hymenochaetaceae
+16.6667	2	0	genus	175660	                        Pyrrhoderma
+16.6667	2	2	species	2282105	                          Pyrrhoderma hainanense
+8.3333	1	0	family	574935	                      Schizoporaceae
+8.3333	1	0	genus	1124675	                        Xylodon
+8.3333	1	1	species	2184747	                          Xylodon attenuatus
+8.3333	1	0	phylum	4890	            Ascomycota
+8.3333	1	0	clade	716545	              saccharomyceta
+8.3333	1	0	subphylum	147537	                Saccharomycotina
+8.3333	1	0	class	4891	                  Saccharomycetes
+8.3333	1	0	order	4892	                    Saccharomycetales
+8.3333	1	0	no rank	241407	                      Saccharomycetales incertae sedis
+8.3333	1	0	genus	2952368	                        Candida/Saccharomycetales
+8.3333	1	1	species	1183333	                          [Candida] tunisiensis

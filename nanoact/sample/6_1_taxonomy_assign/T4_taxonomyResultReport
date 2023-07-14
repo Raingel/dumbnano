@@ -1,0 +1,34 @@
+100.0000	13	0	no rank	1	root
+100.0000	13	0	no rank	131567	  cellular organisms
+100.0000	13	0	superkingdom	2759	    Eukaryota
+100.0000	13	0	clade	33154	      Opisthokonta
+100.0000	13	0	kingdom	4751	        Fungi
+100.0000	13	0	subkingdom	451864	          Dikarya
+84.6154	11	0	phylum	5204	            Basidiomycota
+84.6154	11	0	subphylum	5302	              Agaricomycotina
+84.6154	11	0	class	155619	                Agaricomycetes
+69.2308	9	0	subclass	452333	                  Agaricomycetidae
+69.2308	9	0	order	5338	                    Agaricales
+69.2308	9	0	suborder	2982303	                      Tricholomatineae
+69.2308	9	0	family	930979	                        Lyophyllaceae
+69.2308	9	1	genus	71927	                          Termitomyces
+53.8462	7	0	no rank	2634893	                            unclassified Termitomyces
+38.4615	5	5	species	2979700	                              Termitomyces sp. S25
+15.3846	2	2	species	2979701	                              Termitomyces sp. S28
+7.6923	1	1	species	71928	                            Termitomyces cylindricus
+15.3846	2	0	no rank	355688	                  Agaricomycetes incertae sedis
+15.3846	2	0	order	139380	                    Hymenochaetales
+15.3846	2	0	family	40424	                      Hymenochaetaceae
+15.3846	2	0	genus	175660	                        Pyrrhoderma
+15.3846	2	2	species	2282105	                          Pyrrhoderma hainanense
+15.3846	2	0	phylum	4890	            Ascomycota
+15.3846	2	1	clade	716545	              saccharomyceta
+7.6923	1	0	subphylum	147538	                Pezizomycotina
+7.6923	1	0	clade	716546	                  leotiomyceta
+7.6923	1	0	clade	715989	                    sordariomyceta
+7.6923	1	0	class	147550	                      Sordariomycetes
+7.6923	1	0	subclass	222543	                        Hypocreomycetidae
+7.6923	1	0	order	5125	                          Hypocreales
+7.6923	1	0	family	34397	                            Clavicipitaceae
+7.6923	1	0	genus	5529	                              Metarhizium
+7.6923	1	1	species	165219	                                Metarhizium frigidum

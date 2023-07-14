@@ -1,0 +1,17 @@
+100.0000	6	0	no rank	1	root
+100.0000	6	0	no rank	131567	  cellular organisms
+100.0000	6	0	superkingdom	2759	    Eukaryota
+100.0000	6	0	clade	33154	      Opisthokonta
+100.0000	6	0	kingdom	4751	        Fungi
+100.0000	6	0	subkingdom	451864	          Dikarya
+83.3333	5	0	phylum	4890	            Ascomycota
+83.3333	5	5	clade	716545	              saccharomyceta
+16.6667	1	0	phylum	5204	            Basidiomycota
+16.6667	1	0	subphylum	5302	              Agaricomycotina
+16.6667	1	0	class	155619	                Agaricomycetes
+16.6667	1	0	subclass	452333	                  Agaricomycetidae
+16.6667	1	0	order	5338	                    Agaricales
+16.6667	1	0	suborder	2982303	                      Tricholomatineae
+16.6667	1	0	family	930979	                        Lyophyllaceae
+16.6667	1	0	genus	71927	                          Termitomyces
+16.6667	1	1	species	71928	                            Termitomyces cylindricus

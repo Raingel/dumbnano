@@ -1,0 +1,24 @@
+100.0000	7	0	no rank	1	root
+100.0000	7	0	no rank	131567	  cellular organisms
+100.0000	7	0	superkingdom	2759	    Eukaryota
+100.0000	7	0	clade	33154	      Opisthokonta
+100.0000	7	0	kingdom	4751	        Fungi
+100.0000	7	0	subkingdom	451864	          Dikarya
+100.0000	7	0	phylum	4890	            Ascomycota
+100.0000	7	0	clade	716545	              saccharomyceta
+100.0000	7	0	subphylum	147538	                Pezizomycotina
+100.0000	7	0	clade	716546	                  leotiomyceta
+71.4286	5	0	clade	715989	                    sordariomyceta
+71.4286	5	0	class	147550	                      Sordariomycetes
+71.4286	5	0	subclass	222543	                        Hypocreomycetidae
+71.4286	5	0	order	5592	                          Microascales
+71.4286	5	0	family	5593	                            Microascaceae
+71.4286	5	0	genus	5596	                              Pseudallescheria
+71.4286	5	5	species	70116	                                Pseudallescheria angusta
+28.5714	2	0	clade	715962	                    dothideomyceta
+28.5714	2	0	class	147541	                      Dothideomycetes
+28.5714	2	0	subclass	451867	                        Dothideomycetidae
+28.5714	2	0	order	2726946	                          Cladosporiales
+28.5714	2	1	family	452563	                            Cladosporiaceae
+14.2857	1	0	genus	5498	                              Cladosporium
+14.2857	1	1	species	643907	                                Cladosporium colombiae

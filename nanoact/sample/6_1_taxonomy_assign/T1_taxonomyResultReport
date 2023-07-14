@@ -1,0 +1,22 @@
+100.0000	8	0	no rank	1	root
+100.0000	8	0	no rank	131567	  cellular organisms
+87.5000	7	0	superkingdom	2759	    Eukaryota
+87.5000	7	0	clade	33154	      Opisthokonta
+87.5000	7	0	kingdom	4751	        Fungi
+87.5000	7	0	subkingdom	451864	          Dikarya
+87.5000	7	0	phylum	4890	            Ascomycota
+87.5000	7	6	clade	716545	              saccharomyceta
+12.5000	1	0	subphylum	147537	                Saccharomycotina
+12.5000	1	0	class	4891	                  Saccharomycetes
+12.5000	1	0	order	4892	                    Saccharomycetales
+12.5000	1	0	no rank	241407	                      Saccharomycetales incertae sedis
+12.5000	1	0	genus	1910789	                        Diutina
+12.5000	1	1	species	399469	                          Diutina scorzettiae
+12.5000	1	0	superkingdom	2	    Bacteria
+12.5000	1	0	clade	1783272	      Terrabacteria group
+12.5000	1	0	phylum	1239	        Bacillota
+12.5000	1	0	class	91061	          Bacilli
+12.5000	1	0	order	1385	            Bacillales
+12.5000	1	0	family	186817	              Bacillaceae
+12.5000	1	0	genus	1276290	                Caldibacillus
+12.5000	1	1	species	251051	                  Caldibacillus thermolactis

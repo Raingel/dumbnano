@@ -1,0 +1,30 @@
+100.0000	19	0	no rank	1	root
+100.0000	19	0	no rank	131567	  cellular organisms
+100.0000	19	0	superkingdom	2759	    Eukaryota
+100.0000	19	0	clade	33154	      Opisthokonta
+100.0000	19	0	kingdom	4751	        Fungi
+100.0000	19	0	subkingdom	451864	          Dikarya
+94.7368	18	0	phylum	5204	            Basidiomycota
+47.3684	9	0	subphylum	5302	              Agaricomycotina
+47.3684	9	0	class	155619	                Agaricomycetes
+47.3684	9	0	subclass	452333	                  Agaricomycetidae
+47.3684	9	0	order	5338	                    Agaricales
+47.3684	9	0	suborder	2982303	                      Tricholomatineae
+47.3684	9	0	family	930979	                        Lyophyllaceae
+47.3684	9	2	genus	71927	                          Termitomyces
+31.5789	6	0	no rank	2634893	                            unclassified Termitomyces
+31.5789	6	6	species	2979700	                              Termitomyces sp. S25
+5.2632	1	1	species	71928	                            Termitomyces cylindricus
+47.3684	9	0	subphylum	29000	              Pucciniomycotina
+47.3684	9	0	class	162481	                Microbotryomycetes
+47.3684	9	0	no rank	162483	                  Microbotryomycetes incertae sedis
+47.3684	9	0	genus	256806	                    Curvibasidium
+47.3684	9	9	species	114767	                      [Rhodotorula] nothofagi
+5.2632	1	0	phylum	4890	            Ascomycota
+5.2632	1	0	clade	716545	              saccharomyceta
+5.2632	1	0	subphylum	147537	                Saccharomycotina
+5.2632	1	0	class	4891	                  Saccharomycetes
+5.2632	1	0	order	4892	                    Saccharomycetales
+5.2632	1	0	family	29827	                      Lipomycetaceae
+5.2632	1	0	genus	29828	                        Lipomyces
+5.2632	1	1	species	45792	                          Lipomyces oligophaga

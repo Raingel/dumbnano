@@ -1,0 +1,25 @@
+100.0000	2	0	no rank	1	root
+100.0000	2	0	no rank	131567	  cellular organisms
+100.0000	2	0	superkingdom	2759	    Eukaryota
+100.0000	2	0	clade	33154	      Opisthokonta
+100.0000	2	0	kingdom	4751	        Fungi
+100.0000	2	0	subkingdom	451864	          Dikarya
+50.0000	1	0	phylum	4890	            Ascomycota
+50.0000	1	0	clade	716545	              saccharomyceta
+50.0000	1	0	subphylum	147538	                Pezizomycotina
+50.0000	1	0	clade	716546	                  leotiomyceta
+50.0000	1	0	clade	715989	                    sordariomyceta
+50.0000	1	0	class	147550	                      Sordariomycetes
+50.0000	1	0	subclass	222543	                        Hypocreomycetidae
+50.0000	1	0	order	5592	                          Microascales
+50.0000	1	0	family	5593	                            Microascaceae
+50.0000	1	0	genus	5596	                              Pseudallescheria
+50.0000	1	1	species	70116	                                Pseudallescheria angusta
+50.0000	1	0	phylum	5204	            Basidiomycota
+50.0000	1	0	subphylum	5302	              Agaricomycotina
+50.0000	1	0	class	155619	                Agaricomycetes
+50.0000	1	0	subclass	452333	                  Agaricomycetidae
+50.0000	1	0	order	5338	                    Agaricales
+50.0000	1	0	suborder	2982303	                      Tricholomatineae
+50.0000	1	0	family	930979	                        Lyophyllaceae
+50.0000	1	1	genus	71927	                          Termitomyces

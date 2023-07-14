@@ -1,0 +1,21 @@
+100.0000	4	0	no rank	1	root
+100.0000	4	0	no rank	131567	  cellular organisms
+100.0000	4	0	superkingdom	2759	    Eukaryota
+100.0000	4	0	clade	33154	      Opisthokonta
+100.0000	4	0	kingdom	4751	        Fungi
+100.0000	4	0	subkingdom	451864	          Dikarya
+100.0000	4	0	phylum	5204	            Basidiomycota
+100.0000	4	0	subphylum	5302	              Agaricomycotina
+100.0000	4	0	class	155619	                Agaricomycetes
+100.0000	4	0	subclass	452333	                  Agaricomycetidae
+100.0000	4	0	order	5338	                    Agaricales
+50.0000	2	0	suborder	2982303	                      Tricholomatineae
+50.0000	2	0	family	930979	                        Lyophyllaceae
+50.0000	2	1	genus	71927	                          Termitomyces
+25.0000	1	0	no rank	2634893	                            unclassified Termitomyces
+25.0000	1	1	species	2979700	                              Termitomyces sp. S25
+50.0000	2	0	suborder	2982316	                      Marasmiineae
+50.0000	2	0	family	72117	                        Omphalotaceae
+50.0000	2	0	genus	93827	                          Gymnopus
+25.0000	1	1	species	1932875	                            Gymnopus pygmaeus
+25.0000	1	1	species	2706011	                            Gymnopus alliifoetidissimus

@@ -1,0 +1,25 @@
+100.0000	105	0	no rank	1	root
+100.0000	105	0	no rank	131567	  cellular organisms
+100.0000	105	0	superkingdom	2759	    Eukaryota
+100.0000	105	0	clade	33154	      Opisthokonta
+100.0000	105	0	kingdom	4751	        Fungi
+100.0000	105	0	subkingdom	451864	          Dikarya
+100.0000	105	0	phylum	4890	            Ascomycota
+100.0000	105	0	clade	716545	              saccharomyceta
+100.0000	105	0	subphylum	147538	                Pezizomycotina
+100.0000	105	0	clade	716546	                  leotiomyceta
+100.0000	105	0	clade	715962	                    dothideomyceta
+100.0000	105	0	class	147541	                      Dothideomycetes
+100.0000	105	0	subclass	451867	                        Dothideomycetidae
+100.0000	105	0	order	2726946	                          Cladosporiales
+100.0000	105	19	family	452563	                            Cladosporiaceae
+77.1429	81	40	genus	5498	                              Cladosporium
+17.1429	18	18	species	887100	                                Cladosporium pseudocladosporioides
+10.4762	11	11	species	643907	                                Cladosporium colombiae
+5.7143	6	6	species	29919	                                Cladosporium oxysporum
+1.9048	2	2	species	887102	                                Cladosporium scabrellum
+1.9048	2	2	species	1049285	                                Cladosporium phaenocomae
+0.9524	1	1	species	643908	                                Cladosporium pini-ponderosae
+0.9524	1	1	species	887104	                                Cladosporium varians
+4.7619	5	0	genus	706563	                              Melanodothis
+4.7619	5	5	species	706564	                                Melanodothis caricis

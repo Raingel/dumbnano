@@ -1,0 +1,24 @@
+100.0000	9	0	no rank	1	root
+100.0000	9	0	no rank	131567	  cellular organisms
+100.0000	9	0	superkingdom	2759	    Eukaryota
+100.0000	9	0	clade	33154	      Opisthokonta
+100.0000	9	1	kingdom	4751	        Fungi
+88.8889	8	0	subkingdom	451864	          Dikarya
+77.7778	7	0	phylum	5204	            Basidiomycota
+77.7778	7	0	subphylum	5302	              Agaricomycotina
+77.7778	7	0	class	155619	                Agaricomycetes
+55.5556	5	0	subclass	452333	                  Agaricomycetidae
+55.5556	5	0	order	5338	                    Agaricales
+55.5556	5	0	suborder	2982303	                      Tricholomatineae
+55.5556	5	0	family	930979	                        Lyophyllaceae
+55.5556	5	0	genus	71927	                          Termitomyces
+55.5556	5	0	no rank	2634893	                            unclassified Termitomyces
+44.4444	4	4	species	2979700	                              Termitomyces sp. S25
+11.1111	1	1	species	2979701	                              Termitomyces sp. S28
+22.2222	2	0	no rank	355688	                  Agaricomycetes incertae sedis
+22.2222	2	0	order	139380	                    Hymenochaetales
+22.2222	2	0	family	40424	                      Hymenochaetaceae
+22.2222	2	0	genus	175660	                        Pyrrhoderma
+22.2222	2	2	species	2282105	                          Pyrrhoderma hainanense
+11.1111	1	0	phylum	4890	            Ascomycota
+11.1111	1	1	clade	716545	              saccharomyceta
