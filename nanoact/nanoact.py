@@ -95,12 +95,16 @@ class NanoAct():
     """
     def _fastq_reader(self, handle, suppress_warning=True):
         #Custom fastq reader, which can handle the case when the quality score is inconsistent with the sequence length
+        line_counter = 0
         while True:           
+            line_counter += 1
             line = handle.readline()
             if not line:
                 return
             if line[0] != "@":
-                raise ValueError("Records in Fastq files should start with '@'")
+                print("Skipped Line", line_counter, "in Fastq file does not start with '@', fastq file might be corrupted")
+                continue
+                #raise ValueError("Records in Fastq files should start with '@', fastq file might be corrupted")
             title = line[1:].rstrip()
             seq = handle.readline().rstrip()
             handle.readline() # skip the line starting with "+"
@@ -792,6 +796,9 @@ class NanoAct():
             average_quality (float): the average quality score.
         """
         quality_scores = [ord(char) - 33 for char in quality_string]
+        #Prevent division by zero
+        if len(quality_scores) == 0:
+            return 0
         average_quality = sum(quality_scores) / len(quality_scores)
         return average_quality
     def qualityfilt(self, src, des, name="all.fastq", QSCORE = 8, MIN_LEN = 400, MAX_LEN = 8000):
@@ -805,21 +812,12 @@ class NanoAct():
         passed = 0
         with open(src, 'r') as infile:
             with open(des, 'w') as outfile:
-                while True:
-                    title = infile.readline().strip()
-                    if not title:
-                        break
-                    seq = infile.readline().strip()
-                    plus = infile.readline().strip()
-                    qual = infile.readline().strip()
+                for rec in self._fastq_reader(infile):
                     total += 1
-                    if self._average_quality(qual) >= QSCORE and len(seq) >= MIN_LEN and len(seq) <= MAX_LEN:
-                        outfile.write(title + "\n")
-                        outfile.write(seq + "\n")
-                        outfile.write(plus + "\n")
-                        outfile.write(qual + "\n")
+                    if self._average_quality(rec['qual']) >= QSCORE and len(rec['seq']) >= MIN_LEN and len(rec['seq']) <= MAX_LEN:
                         passed += 1
-        print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter")
+                        outfile.write(f"@{rec['title']}\n{rec['seq']}\n+\n{rec['qual']}\n")
+                    print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter", end="\r")
         return des
     def minibar(self, src, des, BARCODE_INDEX_FILE, MINIBAR_INDEX_DIS):
         src = src
@@ -1236,9 +1234,16 @@ class NanoAct():
                        output_format = "both",
                        min_seq_id=0.5, cov_mode=0, k=14, 
                        threads=8, s=7.5, 
-                       cluster_mode=0, min_read_num = 0,
+                       cluster_mode=0, 
+                       min_read_num = 0,
+                       min_read_ratio = 0,
                        kmer_per_seq = 20,
-                       suppress_out=True):
+                       suppress_output=True,
+                       tmp = ""):
+        #If tmp for mmseqs is on NFS or other cloud storage, it will cause some unknown issues in mmseqs. So let user specify a local tmp folder if needed.
+        if tmp == "":
+            tmp = f"{self.TEMP}/tmp"
+
         if cluster_mode not in [0,1,2,'linclust']:
             raise ValueError("cluster_mode must be one of 0,1,2,'linclust'")
         #Get current library file  path
@@ -1270,20 +1275,20 @@ class NanoAct():
 
             #build db
             #print("Creating db")
-            self._exec(f"{mmseqs} createdb {fas_path} {self.TEMP}/db", suppress_output=suppress_out)
+            self._exec(f"{mmseqs} createdb {fas_path} {self.TEMP}/db", suppress_output=suppress_output)
             #cluster
             #print("Clustering")
             if  cluster_mode == 'linclust':
-                self._exec(f"{mmseqs} linclust {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/tmp --kmer-per-seq {kmer_per_seq} --min-seq-id {min_seq_id} --cov-mode {cov_mode} --threads {threads}", suppress_output=suppress_out)
+                self._exec(f"{mmseqs} linclust {self.TEMP}/db {self.TEMP}/cluster {tmp} --kmer-per-seq {kmer_per_seq} --min-seq-id {min_seq_id} --cov-mode {cov_mode} --threads {threads}", suppress_output=suppress_output)
             else:
-                self._exec(f"{mmseqs} cluster {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/tmp --min-seq-id {min_seq_id} --cov-mode {cov_mode} -k {k} --threads {threads} -s {s} --cluster-mode {cluster_mode}", suppress_output=suppress_out)
+                self._exec(f"{mmseqs} cluster {self.TEMP}/db {self.TEMP}/cluster {tmp} --min-seq-id {min_seq_id} --cov-mode {cov_mode} -k {k} --threads {threads} -s {s} --cluster-mode {cluster_mode}", suppress_output=suppress_output)
             #export tsv
 
             #self._exec(f"{mmseqs} createtsv {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.tsv")
             #export fasta
             #print("Parsing result")
-            self._exec(f"{mmseqs} createseqfiledb {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.seq", suppress_output=suppress_out)
-            self._exec(f"{mmseqs} result2flat {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster.seq {self.TEMP}/cluster.fas", suppress_output=suppress_out)
+            self._exec(f"{mmseqs} createseqfiledb {self.TEMP}/db {self.TEMP}/cluster {self.TEMP}/cluster.seq", suppress_output=suppress_output)
+            self._exec(f"{mmseqs} result2flat {self.TEMP}/db {self.TEMP}/db {self.TEMP}/cluster.seq {self.TEMP}/cluster.fas", suppress_output=suppress_output)
             try:
                 with open(f"{self.TEMP}/cluster.fas", 'r') as handle:
                     #Read original sequences
@@ -1294,6 +1299,10 @@ class NanoAct():
                         elif ext in self.fastq_ext:
                             raw_reads = list(self._fastq_reader(rawfile))
                             raw_reads = {r['title']:{'title':r['title'], 'seq':r['seq'], 'qual':r['qual']} for r in raw_reads}
+                        else:
+                            raise ValueError("Invalid input format")
+                        #Save raw_reads number for calculating read ratio
+                        raw_reads_num = len(raw_reads)
                     bin = {}
                     cluster_no = -1
                     for rec in self._fasta_reader(handle):
@@ -1310,7 +1319,7 @@ class NanoAct():
             #save each cluster to file
             print(f"Number of clusters", len(bin))
             for cluster_no in bin:
-                if len(bin[cluster_no]) < min_read_num:
+                if len(bin[cluster_no]) < int(max(min_read_num, min_read_ratio*raw_reads_num)):
                     continue
                 if output_format in ['both','fasta']:
                     with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
@@ -1732,7 +1741,9 @@ class NanoAct():
         fungi.18SrRNA
         fungi.28SrRNA
         fungi.ITS
+        plant_rbcl
         """
+        des = os.path.abspath(des)
         mode = "lca" #Another mode, easy-search is deprecated
         #Clean temp folder
         self._clean_temp()
@@ -1766,11 +1777,19 @@ class NanoAct():
         #Merge custom_fas and fas.gz in refdb folder into {self.TEMP}/ref_db.fas
         print("Merging custom database and ref_db...")
         with open(f"{self.TEMP}/ref_db.fas", 'w') as handle:
-            #Load ref_db
+            #Load ref_db from https://github.com/Raingel/nanoact_refdb/raw/master/refdb/
             for r in ref_db:
                 try:
-                    with gzip.open(f"{self.lib_path}/refdb/{r}.fas.gz", 'rb') as f:
-                        handle.write(f.read().decode('utf-8'))
+                    print("Downloading ref_db: ", r)
+                    r_URI = f"https://github.com/Raingel/nanoact_refdb/raw/master/refdb/{r}.fas.gz"
+                    #Check if file exists
+                    r_path = f"{self.TEMP}/{r}.fas.gz"
+                    if not os.path.isfile(r_path):
+                        r = get(r_URI, allow_redirects=True)
+                        open(r_path, 'wb').write(r.content)
+                    #Write content of r to handle
+                    with gzip.open(r_path, 'rb') as f_in:
+                        handle.write(f_in.read().decode("utf-8"))
                 except Exception as e:
                     print(f"Error: {r}.fas.gz load failed.")
             #Load custom_db
@@ -1784,7 +1803,8 @@ class NanoAct():
         #if mode == 'lca', taxdump and ref_db must be prepared
         if mode == 'lca':
             #build db
-            self._exec(f'{mmseqs} createdb {self.TEMP}/ref_db.fas {self.TEMP}/ref_db', suppress_output=True)
+            print("Building ref_db from ref_db.fas...")
+            self._exec(f'{mmseqs} createdb {self.TEMP}/ref_db.fas {self.TEMP}/ref_db', suppress_output=False)
             #Edit lookup table to include taxonomic information
             with open(f"{self.TEMP}/ref_db.lookup", "r") as f:
                 lines = f.readlines()
@@ -1810,7 +1830,7 @@ class NanoAct():
             with tarfile.open(f"{self.TEMP}/ncbi-taxdump/taxdump.tar.gz", "r:gz") as tar:
                 tar.extractall(path=f"{self.TEMP}/ncbi-taxdump")
             #Create taxonomic database with createtaxdb
-            self._exec(f"{mmseqs} createtaxdb {self.TEMP}/ref_db tmp --ncbi-tax-dump {self.TEMP}/ncbi-taxdump/ --tax-mapping-file {self.TEMP}/ref_db.taxidmapping",
+            self._exec(f"{mmseqs} createtaxdb {self.TEMP}/ref_db {self.TEMP}/tmp --ncbi-tax-dump {self.TEMP}/ncbi-taxdump/ --tax-mapping-file {self.TEMP}/ref_db.taxidmapping",
                         suppress_output=False)
 
         #Start taxonomy assignment
@@ -1867,7 +1887,7 @@ class NanoAct():
                 #Create query db
                 self._exec(f"{mmseqs} createdb {query} {self.TEMP}/{SampleID}_query_db", suppress_output=False)
                 #Run lca
-                self._exec(f"{mmseqs} taxonomy {self.TEMP}/{SampleID}_query_db {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult tmp --search-type 3 --lca-mode {lca_mode}", suppress_output=False)
+                self._exec(f"{mmseqs} taxonomy {self.TEMP}/{SampleID}_query_db {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {self.TEMP}/tmp --search-type 3 --lca-mode {lca_mode}", suppress_output=False)
                 #Parse lca result to tsv
                 self._exec(f"{mmseqs} createtsv {self.TEMP}/{SampleID}_query_db  {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResult.tsv", suppress_output=False)
                 #Parse tsv file to produce report
