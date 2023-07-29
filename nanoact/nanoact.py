@@ -818,6 +818,7 @@ class NanoAct():
                         passed += 1
                         outfile.write(f"@{rec['title']}\n{rec['seq']}\n+\n{rec['qual']}\n")
                     print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter", end="\r")
+        print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter")
         return des
     def minibar(self, src, des, BARCODE_INDEX_FILE, MINIBAR_INDEX_DIS):
         src = src
