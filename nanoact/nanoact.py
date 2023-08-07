@@ -22,8 +22,11 @@ import tarfile
 class NanoAct():
     def __init__(self, TEMP = './temp/'):
         self.TEMP = TEMP
-        self.fasta_ext = ['.fasta','.fa','.fas']
-        self.fastq_ext = ['.fastq']
+        if TEMP == './temp/':
+            self._p(f"Temp folder is set to {self.TEMP}, you can change it by NanoAct(TEMP='your_temp_folder')")
+            self._p(f"We recommend not to set the temp folder to nfs, ftp, samba, google drive, etc. as it may cause unexpected errors")
+        self.fasta_ext = ['fasta','fa','fas']
+        self.fastq_ext = ['fastq']
         self.lib_path = os.path.dirname(os.path.realpath(__file__))
         self.tax_id_cache = f"{self.lib_path}/taxid_cache/taxid_cache.json"
     def _lib_path(self):
@@ -164,6 +167,28 @@ class NanoAct():
                       'K': 'M', 'M': 'K', 'B': 'V','N' : 'N',
                       'k': 'm', 'm': 'k', 'b': 'v','n' : 'n'}
         return ''.join([complement.get(base, base) for base in s[::-1]])
+    def _p (self, s, end="\n"):
+        print(f"[{time.strftime('%H:%M:%S', time.localtime())}] {s}", end=end)
+    def _check_input_ouput(self, input_format, output_format):
+        r = {}
+        if input_format not in (self.fasta_ext + self.fastq_ext):
+            raise ValueError(f"Input format must be one of {self.fasta_ext + self.fastq_ext}")
+        if output_format not in (self.fasta_ext + self.fastq_ext + ['both']):
+            raise ValueError(f"Output format must be one of {self.fasta_ext + self.fastq_ext + ['both']}")
+        if input_format in self.fasta_ext and output_format in ['fastq', 'both']:
+            raise ValueError("fasta file does not contain quality scores, so it cannot be converted to fastq")
+        r['input'] = input_format
+        r['output'] = {}
+        if output_format in self.fasta_ext:
+            r['output']['fasta'] = output_format
+        if output_format in self.fastq_ext:
+            r['output']['fastq'] = output_format
+        if output_format == 'both':
+            r['output']['fasta'] = 'fas'
+            r['output']['fastq'] = 'fastq'
+        return r
+
+
     def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n"
                   ,timeout = 30):
         program = "blastn&MEGABLAST=on"
@@ -182,9 +207,9 @@ class NanoAct():
             if line.startswith('    RID = '):
                 rid = line.split()[2]
         #Search submitted
-        print("Query", rid, "submitted.")
-        print("You can check the status at https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" + rid + "")
-        print("And results here: https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID=" + rid + "")
+        self._p(f"Query {rid} submitted.")
+        self._p(f"You can check the status at https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID={rid}")
+        self._p(f"And results here: https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID={rid}")
         # poll for results
         retry = timeout * 2
         while True:
@@ -196,21 +221,21 @@ class NanoAct():
             url = 'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=' + rid
             response = get(url)
             if 'Status=WAITING' in response.text:
-                print("Searching...")
+                self._p("Searching...")
                 continue
             if 'Status=FAILED' in response.text:
-                print("Search", rid, "failed; please report to blast-help@ncbi.nlm.nih.gov.")
+                self._p(f"Search {rid} failed; please report to blast-help@ncbi.nlm.nih.gov.")
             if 'Status=UNKNOWN' in response.text:
-                print("Search", rid, "expired.")
+                self._p(f"Search {rid} expired.")
             if 'Status=READY' in response.text:
                 if 'ThereAreHits=yes' in response.text:
-                    print("Search complete, retrieving results...")
+                    self._p("Search complete, retrieving results...")
                     break
                 else:
-                    print("No hits found.")
+                    self._p("No hits found.")
         # retrieve and display results
         url = f'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID={rid}&FORMAT_TYPE=XML'
-        print("Retrieving results from", url)
+        self._p(f"Retrieving results from {url}")
         response = get(url)
         #Convert the XML to a dictionary
         blast_dict = xmltodict.parse(response.text)
@@ -227,7 +252,7 @@ class NanoAct():
             try:
                 seq_name = rec['Iteration_query-def']
             except Exception as e:
-                print(e)
+                self._p(e)
                 continue
             try: 
                 hit = rec['Iteration_hits']['Hit'][0]
@@ -262,7 +287,7 @@ class NanoAct():
                                     taxid = j['GBQualifier_value'].split(':')[-1]
                     pool[seq_name].update({'org': org, 'taxid': taxid})
                 except Exception as e:
-                    print(e)
+                    self._p(e)
                     pass
                 #Get all ranks
                 ranks = {"kingdom":"incertae sedis", "phylum":"incertae sedis", "class":"incertae sedis", "order":"incertae sedis", "family":"incertae sedis", "genus":"incertae sedis"}
@@ -278,25 +303,42 @@ class NanoAct():
                             ranks[i['Rank']] = i['ScientificName']
                     pool[seq_name].update(ranks)
                 except Exception as e:
-                    print(e)
+                    self._p(f"Error: {taxid} {e}")
                     pass
         return pool
-    def blast_2 (self, src, des, name="blast.csv", funguild = True, startswith="con_", query_range=(None,None), batch = 5, timeout=30):
+    def blast_2 (self, src, des, name="blast.csv", 
+                 funguild = True, 
+                 startswith="con_",
+                 input_format="fasta",
+                 query_range=(None,None), batch = 5, timeout=30):
         #Collect all sequences
         pool_df = pd.DataFrame() 
         query_seqs=[] 
+        input_ext = self._check_input_ouput(input_format, "fasta")
         for f in os.scandir(src):
-            if f.name.startswith(startswith) and f.name.endswith(".fas"):
+            if not f.name.startswith(startswith):
+                continue
+            filename, ext = os.path.splitext(f.name)
+            ext = ext[1:]
+            if f.is_file() and ext == input_ext['input']:   
                 with open(f.path, 'r') as handle:
-                    seqs = list(self._fasta_reader(handle))
+                    if ext in self.fasta_ext:
+                        seqs = list(self._fasta_reader(handle))
+                    elif ext in self.fastq_ext:
+                        seqs = list(self._fastq_reader(handle))
+                    else:
+                        continue
                     for s in seqs:
                         pool_df = pd.concat([pool_df, pd.DataFrame([s])], ignore_index=True)
                         #If sequence is too long, preserve only max_query_length in middle
                         q=s['seq'][query_range[0]:query_range[1]]
                         if len(q) == 0:
-                            print(f"Zero query length. Check your query_range. Skipping {s['title']}")
+                            self._p(f"Zero query length. Check your query_range. Skipping {s['title']}")
                             continue
-                        query_seqs.append(f">{s['title']}\n{q}")       
+                        query_seqs.append(f">{s['title']}\n{q}")     
+        if len(query_seqs) == 0:
+            self._p("No sequence found, exiting")
+            return None  
         #set title as index
         pool_df.set_index('title', inplace=True)
         for index, row in pool_df.iterrows():
@@ -304,18 +346,18 @@ class NanoAct():
             try:
                 #2110_cluster_-1_r2154.fas	
                 #{sample}_cluster_{cluster_no}_r{reads_count}.fas
-                sample, cluster_no, reads_count = re.search("(.*)_cluster_([-0-9]+)_r(\d+).fas", index).groups()
+                sample, cluster_no, reads_count = re.search("(.*)_cluster_([-0-9]+)_r(\d+)", index).groups()
                 pool_df.loc[index, 'sample'] = sample
                 pool_df.loc[index, 'cluster_no'] = cluster_no
                 pool_df.loc[index, 'reads_count'] = reads_count
             except Exception as e:
-                print(e)
+                self._p(e)
                 pass    
         #Blast all sequences
         i = 0
         blast_result_pool = {}
         while i < len(query_seqs):
-            print("Blasting", i, "to", i+batch, "of", len(query_seqs))
+            self._p(f"Blasting {i} to {i+batch} of {len(query_seqs)}")
             query = "\n".join(query_seqs[i:i+batch])
             retry = 3
             while retry >= 0:
@@ -327,7 +369,7 @@ class NanoAct():
                     else:
                         retry -= 1
                 except Exception as e:
-                    print(e)
+                    self._p(e)
                     retry -= 1
             i+=batch
         #print(blast_result_pool)
@@ -373,7 +415,7 @@ class NanoAct():
         #input_format: fastq or fasta or both
         #search_range: number of bases in the beginning of raw read to search for primer
         #Output: a folder containing sequences with the right orientation
-        self._check_input_ouput(input_format, output_format)
+        io_format = self._check_input_ouput(input_format, output_format)
         try:
             os.makedirs(des, exist_ok=True)
         except:
@@ -385,37 +427,35 @@ class NanoAct():
             bar_idx = pd.read_csv(BARCODE_INDEX_FILE)
         #Read fasta file
         for f in os.scandir(src):
-            if f.is_file() and (f.name.endswith(".fas") or f.name.endswith(".fastq")):
-                if input_format == "both":
-                    pass
-                elif input_format == "fastq" and f.name.endswith(".fas"):
+            #Get filename without extension
+            if f.is_file():
+                filename,ext = os.path.splitext(f.name)
+                ext = ext[1:]
+                if ext != io_format['input']:
+                    self._p(f"{f.name} is not in the accepted input format, skipping")
                     continue
-                elif input_format == "fasta" and f.name.endswith(".fastq"):
-                    continue
-                #Get filename without extension
-                filename = os.path.splitext(f.name)[0]
-                print(f.name, "processing")
-                
+                self._p(f"Processing {f.name}")
                 try:
                     F = bar_idx[bar_idx['SampleID'].astype(str)==filename][FwPrimer].values[0]
                     R = bar_idx[bar_idx['SampleID'].astype(str)==filename][RvPrimer].values[0]
                 except IndexError:
-                    print(f"Sample {filename} not found in the barcode file, skipping")
+                    self._p(f"Sample {filename} not found in the barcode file, skipping")
                     continue
 
 
                 #Initialize output file
-                if output_format == "both" or output_format == "fasta":
-                    output_fasta = open(f"{des}/{filename}.fas", "w")
-                if output_format == "both" or output_format == "fastq":
-                    output_fastq = open(f"{des}/{filename}.fastq", "w")
+                if 'fastq' in io_format['output']:
+                    output_fastq = open(f"{des}/{filename}.{io_format['output']['fastq']}", "w")
+                if 'fasta' in io_format['output']:
+                    output_fasta = open(f"{des}/{filename}.{io_format['output']['fasta']}", "w")
 
                 with open(f.path) as handle:
                     with open(f"{des}/{f.name}", "w") as output:
-                        if f.name.endswith(".fas"):
-                            records = self._fasta_reader(handle)
-                        elif f.name.endswith(".fastq"):
+                        if f.name.endswith(".fastq"):
                             records = self._fastq_reader(handle)
+                        else:
+                            f.name.endswith(".fastq")
+                            records = self._fasta_reader(handle)
                         for record in records: 
                             #Check if the sequence is in the right orientation
                             aln_f = edlib.align(F.upper(), record['seq'].upper()[:search_range], mode="HW", task="locations")
@@ -423,9 +463,9 @@ class NanoAct():
                             if aln_f['editDistance'] > aln_r['editDistance']:
                                 record['seq'] = self._reverse_complement(record['seq'])
                             #output.write(f">{record['title']}\n{record['seq']}\n")
-                            if output_format == "both" or output_format == "fasta":
+                            if 'fasta' in io_format['output']:
                                 output_fasta.write(f">{record['title']}\n{record['seq']}\n")
-                            if output_format == "both" or output_format == "fastq":
+                            if 'fastq' in io_format['output']:
                                 output_fastq.write(f"@{record['title']}\n{record['seq']}\n+\n{record['qual']}\n")
         return des
     def mafft_consensus (self, src, des, minimal_reads=0, input_format="fasta"):
@@ -436,20 +476,25 @@ class NanoAct():
         abs_des = os.path.abspath(des)
         for f in os.scandir(src):
             SampleID, ext = os.path.splitext(f.name)
+            ext = ext[1:]
+            input_ext = self._check_input_ouput(input_format, "fasta")
             if f.is_file():
-                if input_format == "fasta" and ext in self.fasta_ext:
+                if ext != input_ext['input']:
+                    self._p(f"{f.name} is not in the accepted input format, skipping")
+                    continue
+                if ext in self.fasta_ext:
                     #Count seq_num 
                     seq_num = len(list(self._fasta_reader(open(f.path,'r'))))
                     if seq_num < minimal_reads:
-                        print(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
+                        self._p(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
                         continue
                     fas_path = f.path
                     pass
-                elif input_format == "fastq" and ext in self.fastq_ext:
+                elif ext in self.fastq_ext:
                     #Count seq_num
                     seq_num = len(list(self._fastq_reader(open(f.path,'r'))))
                     if seq_num < minimal_reads:
-                        print(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
+                        self._p(f"{f.name} has only {seq_num} reads, less than the {minimal_reads} reads required, skipping")
                         continue
                     #Convert fastq to fasta
                     self._clean_temp()
@@ -460,10 +505,10 @@ class NanoAct():
                     continue
                 
                 #Align sequences
-                print("Working on", f.name, "...")
-                self._mafft(fas_path, f"{abs_des}/aln_{f.name}")
+                self._p(f"Working on {SampleID} ...")
+                self._mafft(fas_path, f"{abs_des}/aln_{SampleID}.fas")
                 #naive consensus
-                with open(f"{abs_des}/aln_{f.name}") as handle:
+                with open(f"{abs_des}/aln_{SampleID}.fas") as handle:
                     records = list(self._fasta_reader(handle))
                     consensus = ""
                     for i in range(len(records[0]['seq'])):
@@ -472,8 +517,8 @@ class NanoAct():
                         com = Counter(col).most_common(1)[0][0]
                         if com != "-":
                             consensus += com
-                    with open(f"{abs_des}/con_{f.name}", "w") as out:
-                        out.write(f">{f.name}\n{consensus}")
+                    with open(f"{abs_des}/con_{SampleID}.fas", "w") as out:
+                        out.write(f">{SampleID}\n{consensus}")
 
         return abs_des
     def _get_sample_id_single (self, seq, barcode_hash_table, search_range=150, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
@@ -514,6 +559,7 @@ class NanoAct():
                     mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15, 
                     expected_length_variation = 0.3, 
                     search_range=150,
+                    rvc_rvanchor = False,
                     input_format = "fastq",
                     output_format = "both",
                     ):
@@ -535,7 +581,7 @@ class NanoAct():
         6.If no barcode is identified, append it to the "UNKNOWN" dictionary.
         7.Finally, output the demultiplexed reads into different output files based on their barcode.
         """
-        self._check_input_ouput(input_format=input_format, output_format=output_format)
+        io_format = self._check_input_ouput(input_format=input_format, output_format=output_format)
         # Define the main function for demultiplexing
         if BARCODE_INDEX_FILE.endswith("tsv"):
             sep = "\t"
@@ -547,13 +593,15 @@ class NanoAct():
         # Read in the barcode index file as a pandas DataFrame
         if not all([x in BARCODE_IDX_DF.columns for x in ["SampleID", "FwIndex", "RvAnchor", "ExpectedLength"]]):
             raise ValueError("BARCODE_INDEX_FILE must have SampleID, FwIndex, RvAnchor columns")
-        print ("BARCODE_INDEX_FILE loaded")
+        self._p("BARCODE_INDEX_FILE loaded")
         # Check whether the barcode index file has the required columns
         barcode_hash_table = {}
         for index, row in BARCODE_IDX_DF.iterrows():
             #Check if RvAnchor is nan
             if pd.isnull(row["RvAnchor"]):
                 row["RvAnchor"] = ""
+            if rvc_rvanchor:
+                row["RvAnchor"] = self._reverse_complement(row["RvAnchor"])
             barcode_hash_table[row["SampleID"]] = {"FwIndex": row["FwIndex"], "RvAnchor": row["RvAnchor"], "ExpectedLength": row["ExpectedLength"]}
 
         # Store the barcode index file as a hash table of barcode-sample ID pairs
@@ -566,13 +614,15 @@ class NanoAct():
         for id in barcode_hash_table:
             pool[id] = []
         # Initialize dictionaries for output files for each sample and additional dictionaries for reads with unknown, multiple, or truncated barcodes
+        _, ext = os.path.splitext(src)
+        ext = ext[1:]
         with open(src, "r") as handle:
-            if input_format == "fastq":
+            if ext in self.fastq_ext and input_format in self.fastq_ext:
                 reader = self._fastq_reader(handle)
-            elif input_format == "fasta":
+            elif ext in self.fasta_ext and input_format in self.fasta_ext:
                 reader = self._fasta_reader(handle)
             else:
-                raise ValueError("input_format must be fastq or fasta")
+                raise ValueError(f"Input file extension {ext} does not match input format {input_format}")
             for record in reader:
                 ids, integrity, seqs= self._get_sample_id_single(record["seq"], barcode_hash_table, search_range, mismatch_ratio_f, mismatch_ratio_r)
                 if len(ids) == 1:
@@ -591,8 +641,9 @@ class NanoAct():
                 else:
                     pool["UNKNOWN"].append(record)
                 counter += 1
+
                 if counter % 10000 == 0:
-                    print(counter)
+                    self._p(f"Parsed {counter}")
         #Save to separate fastq file
         try:
             os.makedirs(f"{des}/", exist_ok=True)
@@ -607,22 +658,24 @@ class NanoAct():
             else:
                 path = f"{des}/{bin}"
             #Save to separate fastq or fasta file based on output_format
-            if output_format == "fastq" or output_format == "both":
-                with open(path+".fastq", "w") as handle:
-                    for record in pool[bin]:
-                        handle.write("@"+record["title"] + "\n")
-                        handle.write(record["seq"] + "\n")
-                        handle.write("+" + "\n")
-                        handle.write(record["qual"] + "\n")
-            if output_format == "fasta" or output_format == "both":
-                with open(path+".fas", "w") as handle:
-                    for record in pool[bin]:
-                        handle.write(">"+ record["title"] + "\n")
-                        handle.write(record["seq"] + "\n")
+            #Initialize output file
+            if 'fastq' in io_format['output']:
+                output_fastq = open(f"{path}.{io_format['output']['fastq']}", "w")
+                for record in pool[bin]:
+                    output_fastq.write("@"+record["title"] + "\n")
+                    output_fastq.write(record["seq"] + "\n")
+                    output_fastq.write("+" + "\n")
+                    output_fastq.write(record["qual"] + "\n")
+            if 'fasta' in io_format['output']:
+                output_fasta = open(f"{path}.{io_format['output']['fasta']}", "w")
+                for record in pool[bin]:
+                    output_fasta.write(">"+ record["title"] + "\n")
+                    output_fasta.write(record["seq"] + "\n")
+
         stat_df.to_csv(f"{des}/2_Singlebar_stat.csv", index=False)
         #Print out the number of reads discarded due to unknown, multiple, or truncated barcodes
         FAILED_NUM = len(pool['UNKNOWN']) + len(pool['MULTIPLE']) + len(pool['TRUNCATED']) + len(pool['IncorrectLength'])
-        print (f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
+        self._p(f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
         return des
     def _get_sample_id_dual (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15, mismatch_ratio_r = 0.15):
         ids = []
@@ -763,12 +816,12 @@ class NanoAct():
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
-            print(e)
+            self._p(e)
             pass
         with open(f'{des}/{name}', 'w') as outfile:
             for f in os.scandir(src):
                 if f.name.endswith(".fastq.gz"):
-                    print("Found fastq file: {}".format(f.name))
+                    self._p("Found fastq file: {}".format(f.name))
                     with gzip.open(f.path, 'rt') as infile:
                         for line in infile:
                             outfile.write(line)
@@ -806,7 +859,8 @@ class NanoAct():
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             pass
-        print("Start Qualityfilt...")
+        self._p("Start Qualityfilt...")
+        self._p(f"QSCORE: {QSCORE}, MIN_LEN: {MIN_LEN}, MAX_LEN: {MAX_LEN}")
         des += f"/{name}"
         total = 0
         passed = 0
@@ -818,7 +872,7 @@ class NanoAct():
                         passed += 1
                         outfile.write(f"@{rec['title']}\n{rec['seq']}\n+\n{rec['qual']}\n")
                     print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter", end="\r")
-        print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter")
+        self._p(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter")
         return des
     def minibar(self, src, des, BARCODE_INDEX_FILE, MINIBAR_INDEX_DIS):
         src = src
@@ -841,14 +895,14 @@ class NanoAct():
                 for s in self._fastq_reader(infile, suppress_warning=True):
                     outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
         return des
-    def batch_to_fasta(self, src, des):
+    def batch_to_fasta(self, src, des, ext = "fas"):
         #Convert all fastq files in a folder to fasta
-        print("Start converting fastq to fasta...")
+        self._p("Start converting fastq to fasta...")
         for f in os.scandir(src):
             if f.name.endswith(".fastq"):
                 print("Converting {}".format(f.name))
                 SampleID, ext = os.path.splitext(f.name)
-                self._fastq_to_fasta(f.path, f"{des}/{SampleID}.fasta")
+                self._fastq_to_fasta(f.path, f"{des}/{SampleID}.{ext}")
         return des
     def distance_matrix(self, path, TRUNCATE_HEAD_TAIL = True):
         SampleID, ext = os.path.splitext(os.path.basename(path))
@@ -959,29 +1013,24 @@ class NanoAct():
             print(e)
         counter= 0
         #Check input and output format
-        self._check_input_ouput(input_format, output_format)
+        io_format = self._check_input_ouput(input_format, output_format)
 
         for f in os.scandir(src):
             SampleID, ext = os.path.splitext(os.path.basename(f.name))
-            
-            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
-                pass
-            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
-                pass
-            else:
+            ext = ext[1:]
+            if ext != io_format['input']:
+                self._p(f"{f.name} is not in the accepted inpute format, skipping")
                 continue
-            print("Trimming {}".format(SampleID))
+            self._p(f"Tirmming {f.name}")
             with open (f.path, 'r') as infile:
                 if ext in self.fastq_ext:
                     seq_iter = self._fastq_reader(infile)
                 elif ext in self.fasta_ext:
                     seq_iter = self._fasta_reader(infile)
-                else:
-                    continue
-                if output_format in  ["fasta", "both"]:
-                    outfile_fasta = open(f"{des}/{SampleID}.fas", 'w')
-                if output_format in  ["fastq", "both"]:
-                    outfile_fastq = open(f"{des}/{SampleID}.fastq", 'w')
+                if "fasta" in io_format['output']:
+                    outfile_fasta = open(f"{des}/{SampleID}.{io_format['output']['fasta']}", 'w')
+                if "fastq" in io_format['output']:
+                    outfile_fastq = open(f"{des}/{SampleID}.{io_format['output']['fastq']}", 'w')
                 for s in seq_iter:
                     try:
                         #Head regions are labeled by minibar as HEAD(uppercase)+barcode(lowercase)+SEQ WE NEED(uppercase)+barcode(lowercase)+TAIL(uppercase) 
@@ -1013,8 +1062,7 @@ class NanoAct():
         except Exception as e:
             print(e)
         #Check input and output format
-        self._check_input_ouput(input_format, output_format)
-
+        io_format = self._check_input_ouput(input_format, output_format)
         try:
             if BARCODE_INDEX_FILE.endswith(".tsv"):
                 df = pd.read_csv(BARCODE_INDEX_FILE, sep="\t")
@@ -1033,14 +1081,12 @@ class NanoAct():
 
         for f in os.scandir(src):
             SampleID, ext = os.path.splitext(os.path.basename(f.name))
-            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
-                pass
-            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
-                pass
-            else:
-                continue
-            
-            print("Processing", SampleID)
+            ext = ext[1:]
+            if f.is_file():
+                if ext != io_format['input']:
+                    self._p(f"{f.name} is not in the accepted input format, skipping")
+                    continue
+            self._p(f"Tirmming {f.name}")
             try:
                 fw_trim = df.loc[df['SampleID'] == SampleID][fw_col].values[0]
                 rv_trim = df.loc[df['SampleID'] == SampleID][rv_col].values[0]
@@ -1061,11 +1107,12 @@ class NanoAct():
                     seq_iter = self._fasta_reader(infile)
                 else:
                     continue
-                if output_format in  ["fasta", "both"]:
-                    outfile_fasta = open(f"{des}/{SampleID}.fas", 'w')
-                if output_format in  ["fastq", "both"]:
-                    outfile_fastq = open(f"{des}/{SampleID}.fastq", 'w')
- 
+                #Initialize output file
+                if 'fastq' in io_format['output']:
+                    output_fastq = open(f"{des}/{SampleID}.{io_format['output']['fastq']}", "w")
+                if 'fasta' in io_format['output']:
+                    output_fasta = open(f"{des}/{SampleID}.{io_format['output']['fasta']}", "w")
+
                 #Record trimmed, no-match, and total reads
                 trimmed_F = 0
                 trimmed_R = 0
@@ -1114,11 +1161,11 @@ class NanoAct():
                     if s['seq'] == "":
                         print(f"Discarded {s['title']} due to empty sequence after trimming")
                         continue
-                    if output_format in  ["fasta", "both"]:
-                        outfile_fasta.write(f">{s['title']}\n{s['seq']}\n")
-                    if output_format in  ["fastq", "both"]:
-                        outfile_fastq.write(f"@{s['title']}\n{s['seq']}\n+\n{s['qual']}\n") 
-            print(f"Total reads: {total}, trimmed forward: {trimmed_F}, trimmed reverse: {trimmed_R}")
+                    if "fasta" in io_format['output']:
+                        output_fasta.write(f">{s['title']}\n{s['seq']}\n")
+                    if "fastq" in io_format['output']:
+                        output_fastq.write(f"@{s['title']}\n{s['seq']}\n+\n{s['qual']}\n") 
+            self._p(f"{SampleID} Total reads: {total}, trimmed forward: {trimmed_F}, trimmed reverse: {trimmed_R}")
         return des
     def trim_reads(self, 
                    src, des,
@@ -1137,7 +1184,7 @@ class NanoAct():
         #mode should either be "table" or "case"
         #if mode is "table", BARCODE_INDEX_FILE should be a tsv or csv file with columns SampleID, fw_col, rv_col
         #if mode is "case", BARCODE_INDEX_FILE wouldn't be used, fw_col and rv_col will also be ignored
-        self._check_input_ouput(input_format=input_format, output_format=output_format)
+        self._check_input_ouput(input_format, output_format)
         if mode == "table":
             self._trim_by_seq(src=src,des=des, 
                               BARCODE_INDEX_FILE=BARCODE_INDEX_FILE,
@@ -1250,7 +1297,7 @@ class NanoAct():
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         mmseqs = f"{lib}/bin/mmseqs"
-        self._check_input_ouput(input_format=input_format, output_format=output_format)
+        io_format = self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des)
         except:
@@ -1258,12 +1305,12 @@ class NanoAct():
         abs_des = os.path.abspath(des)
         for f in os.scandir(src):
             SampleID, ext = os.path.splitext(os.path.basename(f.name))
-            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
-                pass
-            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+            ext = ext[1:]
+            if f.is_file() and ext == io_format['input']:
                 pass
             else:
-                continue 
+                self._p(f"{f.name} is not in the accepted input format, skipping")
+                continue
             #clean up temp folder
             self._clean_temp()
             #Convert fastq to fasta before clustering
@@ -1272,7 +1319,7 @@ class NanoAct():
             else:
                 fas_path = f"{self.TEMP}/from_fastq.fas"
                 self._fastq_to_fasta(f.path, fas_path)
-            print("Clustering", f.name)
+            self._p(f"Clustering {f.name}")
 
             #build db
             #print("Creating db")
@@ -1315,18 +1362,18 @@ class NanoAct():
                             #append use raw_reads, because only raw_reads may contain quality score
                             bin[cluster_no].append(raw_reads[rec['title']])
             except Exception as e:
-                print("Error reading output file", e)
+                self._p(f"Error reading output file, {e}")
                 continue
             #save each cluster to file
-            print(f"Number of clusters", len(bin))
+            self._p(f"Number of clusters {len(bin)}")
             for cluster_no in bin:
                 if len(bin[cluster_no]) < int(max(min_read_num, min_read_ratio*raw_reads_num)):
                     continue
-                if output_format in ['both','fasta']:
+                if 'fasta' in io_format['output']:
                     with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
                         for rec in bin[cluster_no]:
                             handle.write(f">{rec['title']}\n{rec['seq']}\n")
-                if output_format in ['both','fastq']:
+                if 'fastq' in io_format['output']:
                     with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fastq", 'w') as handle:
                         for rec in bin[cluster_no]:
                             handle.write(f"@{rec['title']}\n{rec['seq']}\n+\n{rec['qual']}\n")
@@ -1501,13 +1548,6 @@ class NanoAct():
         #fill nan with 0
         df.fillna(0, inplace=True)
         return df
-    def _check_input_ouput(self, input_format, output_format):
-        if input_format not in ['fasta', 'fastq']:
-            raise ValueError("Input format must be either 'fasta' or 'fastq'")
-        if output_format not in ['fasta', 'fastq', 'both']:
-            raise ValueError("Output format must be either 'fasta', 'fastq' or 'both'")
-        if input_format == 'fasta' and output_format in ['fastq', 'both']:
-            raise ValueError("fasta file does not contain quality scores, so it cannot be converted to fastq")
     def random_sampler(self, src, des, input_format='fasta', output_format='fasta', ratio=0.2):
         self._check_input_ouput(input_format, output_format)
         with open(src, 'r') as handle:
@@ -1538,7 +1578,9 @@ class NanoAct():
     def region_extract (self, src, des, input_format='fastq', output_format='both', 
                         splicer={"start":("TCATTTAGAG","GCCCGTCGCT","GAAGTAAAAG","TCGTAACAAG"),
                                  "end":("GCTGAACTTA","GCATATCAA","ATCAATAAGCG","AAGCGGAGGA")
-                                 }
+                                 },
+                        k=1,
+                            
                         ):
         self._check_input_ouput(input_format, output_format)
         try:
@@ -1566,12 +1608,12 @@ class NanoAct():
                 start = -1
                 end = -1
                 for splice in splicer['start']:
-                    aln = edlib.align(splice, seq['seq'], mode="HW", task="locations", k=1)
+                    aln = edlib.align(splice, seq['seq'], mode="HW", task="locations", k=k)
                     if aln['locations'] != []:
                         start = aln['locations'][0][0]
                         break
                 for splice in splicer['end']:
-                    aln = edlib.align(splice, seq['seq'], mode="HW", task="locations", k=1)
+                    aln = edlib.align(splice, seq['seq'], mode="HW", task="locations", k=k)
                     if aln['locations'] != []:
                         end = aln['locations'][0][1]+1
                         break
@@ -1681,12 +1723,12 @@ class NanoAct():
         #URI = "https://ftp.ncbi.nlm.nih.gov/refseq/TargetedLoci/Fungi/fungi.ITS.gbff.gz"
         name = gbff_URI.split("/")[-1]
         basename, _ = os.path.splitext(name)
-        print(f"Downloading {name} database from NCBI refseq ftp...")
+        self._p(f"Downloading {name} database from NCBI refseq ftp...")
         r = get(gbff_URI, allow_redirects=True)
         open(f"{des}/{name}", 'wb').write(r.content)
         if name.endswith(".gz"):
             #Extract gbff.gz
-            print("Extracting gbff.gz file...")
+            self._p("Extracting gbff.gz file...")
             with gzip.open(f"{des}/{name}", 'rb') as f_in:
                 with open(f"{des}/{basename}", 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
@@ -1700,7 +1742,7 @@ class NanoAct():
         name, _ = os.path.splitext(name)
         recs = list(self._gbff_reader(open(gbff_path, 'r')))
         #Get taxinfo for each record
-        print("Getting taxinfo for each record...")
+        self._p("Getting taxinfo for each record...")
         taxinfos = {}
         taxid_list = set()
         for rec in recs:
@@ -1709,8 +1751,8 @@ class NanoAct():
         batch = 100
         for i in range(0, len(taxid_list), batch):
             taxinfos.update(self._lineage_by_taxid(list(taxid_list)[i:i+batch]))
-            print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...", end="\r")
-        print(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...")
+            self._p(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...", end="\r")
+        self._p(f"{len(taxinfos)}/{len(taxid_list)} taxid processed...")
         #write fasta
         with open(f"{des}/{name}.fas", 'w') as f:
             for rec in recs:
@@ -1730,6 +1772,7 @@ class NanoAct():
                         ref_db = ['fungi.ITS','bacteria.16SrRNA'],
                         evalue_thres=1e-80,
                         simi_thres=0.8,
+                        suppress_mmseqs_output=True,
         ):
         """
         Available ref_db:
@@ -1755,7 +1798,7 @@ class NanoAct():
             pass
         #Download custom_db
         if custom_acc != []:
-            print("Downloading custom database from NCBI...")
+            self._p("Downloading custom database from NCBI...")
             cus_des = f"{self.TEMP}/custom_db.gbff"
             gbff = ""
             #Download 100 acc at a time
@@ -1767,7 +1810,7 @@ class NanoAct():
             custom_fas.append(fas)
         #Download custom_gbff
         if custom_gbff != []:
-            print("Downloading custom gbff file from NCBI...")
+            self._p("Downloading custom gbff file from NCBI...")
             for gbff_URI in custom_gbff:
                 gbff_path = self._gbffgz_download(gbff_URI, self.TEMP)
                 fas = self._gbffgz_to_taxfas(gbff_path, self.TEMP)
@@ -1776,12 +1819,12 @@ class NanoAct():
 
         
         #Merge custom_fas and fas.gz in refdb folder into {self.TEMP}/ref_db.fas
-        print("Merging custom database and ref_db...")
+        self._p("Merging custom database and ref_db...")
         with open(f"{self.TEMP}/ref_db.fas", 'w') as handle:
             #Load ref_db from https://github.com/Raingel/nanoact_refdb/raw/master/refdb/
             for r in ref_db:
                 try:
-                    print("Downloading ref_db: ", r)
+                    self._p("Downloading ref_db: ", r)
                     r_URI = f"https://github.com/Raingel/nanoact_refdb/raw/master/refdb/{r}.fas.gz"
                     #Check if file exists
                     r_path = f"{self.TEMP}/{r}.fas.gz"
@@ -1792,7 +1835,7 @@ class NanoAct():
                     with gzip.open(r_path, 'rb') as f_in:
                         handle.write(f_in.read().decode("utf-8"))
                 except Exception as e:
-                    print(f"Error: {r}.fas.gz load failed.")
+                    self._p(f"Error: {r}.fas.gz load failed.")
             #Load custom_db
             for f in custom_fas:
                 with open(f, 'r') as f:
@@ -1804,8 +1847,8 @@ class NanoAct():
         #if mode == 'lca', taxdump and ref_db must be prepared
         if mode == 'lca':
             #build db
-            print("Building ref_db from ref_db.fas...")
-            self._exec(f'{mmseqs} createdb {self.TEMP}/ref_db.fas {self.TEMP}/ref_db', suppress_output=False)
+            self._p("Building ref_db from ref_db.fas...")
+            self._exec(f'{mmseqs} createdb {self.TEMP}/ref_db.fas {self.TEMP}/ref_db', suppress_output=suppress_mmseqs_output)
             #Edit lookup table to include taxonomic information
             with open(f"{self.TEMP}/ref_db.lookup", "r") as f:
                 lines = f.readlines()
@@ -1832,18 +1875,21 @@ class NanoAct():
                 tar.extractall(path=f"{self.TEMP}/ncbi-taxdump")
             #Create taxonomic database with createtaxdb
             self._exec(f"{mmseqs} createtaxdb {self.TEMP}/ref_db {self.TEMP}/tmp --ncbi-tax-dump {self.TEMP}/ncbi-taxdump/ --tax-mapping-file {self.TEMP}/ref_db.taxidmapping",
-                        suppress_output=False)
+                        suppress_output=suppress_mmseqs_output)
 
         #Start taxonomy assignment
+        input_ext = self._check_input_ouput(input_format, "fasta")
         for f in os.scandir(src):
             SampleID, ext = os.path.splitext(f.name)
-            if input_format == 'fasta' and ext in  self.fasta_ext:
-                seqs = self._fasta_reader(open(f.path,"r"))
-            elif input_format == 'fastq' and ext in self.fastq_ext:
-                seqs = self._fastq_reader(open(f.path,"r"))
+            ext = ext[1:]
+            if ext == input_ext['input']:
+                if ext in self.fasta_ext:
+                    seqs = self._fasta_reader(open(f.path,"r"))
+                elif ext in self.fastq_ext:
+                    seqs = self._fastq_reader(open(f.path,"r"))
             else:
                 continue
-            print("Processing file: ", f.name)
+            self._p(f"Processing file: {f.name}")
             #Prepare query and db file
             query = f"{self.TEMP}/query.fas"
             db = f"{self.TEMP}/ref_db.fas"
@@ -1853,13 +1899,13 @@ class NanoAct():
             #DEPRECATED: mmseqs easy-search 
             if mode == 'easy-search':
                 self._exec(f"{mmseqs} easy-search {query} {db} {des}/{SampleID}.m8 {self.TEMP}/tmp --search-type 3 -a -s 7.5", 
-                        suppress_output=False)
+                        suppress_output=suppress_mmseqs_output)
                 #Parse m8 file
-                print(f"Processing m8 file: {des}/{SampleID}.m8")
+                self._p(f"Processing m8 file: {des}/{SampleID}.m8")
                 try:
                     m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
                 except Exception as e:
-                    print(f"Error: {f.name} m8 file load failed.")
+                    self._p(f"Error: {f.name} m8 file load failed.")
                     continue
                 m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
                 #Remove duplicate qseqid, only preserve the hightest evalue
@@ -1886,14 +1932,14 @@ class NanoAct():
                 m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
             elif mode == 'lca':
                 #Create query db
-                self._exec(f"{mmseqs} createdb {query} {self.TEMP}/{SampleID}_query_db", suppress_output=False)
+                self._exec(f"{mmseqs} createdb {query} {self.TEMP}/{SampleID}_query_db", suppress_output=suppress_mmseqs_output)
                 #Run lca
-                self._exec(f"{mmseqs} taxonomy {self.TEMP}/{SampleID}_query_db {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {self.TEMP}/tmp --search-type 3 --lca-mode {lca_mode}", suppress_output=False)
+                self._exec(f"{mmseqs} taxonomy {self.TEMP}/{SampleID}_query_db {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {self.TEMP}/tmp --search-type 3 --lca-mode {lca_mode}", suppress_output=suppress_mmseqs_output)
                 #Parse lca result to tsv
-                self._exec(f"{mmseqs} createtsv {self.TEMP}/{SampleID}_query_db  {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResult.tsv", suppress_output=False)
+                self._exec(f"{mmseqs} createtsv {self.TEMP}/{SampleID}_query_db  {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResult.tsv", suppress_output=suppress_mmseqs_output)
                 #Parse tsv file to produce report
-                self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport", suppress_output=False)
-                self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport.html --report-mode 1", suppress_output=False)
+                self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport", suppress_output=suppress_mmseqs_output)
+                self._exec(f"{mmseqs} taxonomyreport {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResultReport.html --report-mode 1", suppress_output=suppress_mmseqs_output)
 
     def custom_taxonomy_sankey(self, src, des, img_ext = "png", minimal_reads=1,vertical_scale=1):  
         from sankeyflow import Sankey
