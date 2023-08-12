@@ -22,6 +22,10 @@ import tarfile
 class NanoAct():
     def __init__(self, TEMP = './temp/'):
         self.TEMP = TEMP
+        try:
+            os.mkdir(self.TEMP)
+        except:
+            pass
         if TEMP == './temp/':
             self._p(f"Temp folder is set to {self.TEMP}, you can change it by NanoAct(TEMP='your_temp_folder')")
             self._p(f"We recommend not to set the temp folder to nfs, ftp, samba, google drive, etc. as it may cause unexpected errors")
@@ -1777,7 +1781,7 @@ class NanoAct():
                         ):
         if des == "":
             des = f"{self.TEMP}/ref_db.fas"
-
+        self._clean_temp()
         custom_fas = []
         #Download custom_db
         if custom_acc != []:
@@ -1835,7 +1839,7 @@ class NanoAct():
         
         des = os.path.abspath(des)
         #clean temp folder
-        #self._clean_temp()
+        self._clean_temp()
         try:
             os.mkdir(des)
         except:
