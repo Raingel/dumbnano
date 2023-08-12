@@ -1877,8 +1877,10 @@ class NanoAct():
                 file_count += 1
         query_handle.close()
         self._p(f"Query file prepared. {rec_count} reads from {file_count} files.")
-
-
+        #If no reads in query file, return
+        if rec_count == 0:
+            self._p("No reads in query file. Process terminated.")
+            return
         #Binary path
         mmseqs = f"{self.lib_path}/bin/mmseqs"
         self._p("Running mmseqs easy-search...")
