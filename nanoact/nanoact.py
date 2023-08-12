@@ -1908,7 +1908,9 @@ class NanoAct():
                 sample, _, cluster_no, read_no = row['qseqid'].split("_")
                 new_res_m8.loc[index, 'sample'] = sample
                 new_res_m8.loc[index, 'cluster_no'] = cluster_no
-                new_res_m8.loc[index, 'reads_count'] = read_no.replace("r", "")
+                read_no = read_no.replace("r", "")
+                read_no = read_no.split(".")[0]
+                new_res_m8.loc[index, 'reads_count'] = read_no
             except Exception as e:
                 #self._p(f"Error: {row['sseqid']} split failed.")
                 new_res_m8.loc[index, 'sample'] = ""
