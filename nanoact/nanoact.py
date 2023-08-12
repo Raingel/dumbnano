@@ -1832,6 +1832,7 @@ class NanoAct():
                      name = "blast.csv",
                      startswith="con_",
                      input_format = 'fastq',
+                     ref_db = ['fungi.ITS','bacteria.16SrRNA'],
                      custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
                     custom_gbff = [],
                     suppress_mmseqs_output = True,
@@ -1849,7 +1850,7 @@ class NanoAct():
                         des = "",
                         custom_acc=custom_acc,
                         custom_gbff=custom_gbff,
-                        ref_db = ['fungi.ITS','bacteria.16SrRNA'],
+                        ref_db = ref_db,
                         )
         #Merge all seq from src into one file
         self._p("Preparing query file...")
