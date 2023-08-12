@@ -187,8 +187,6 @@ class NanoAct():
             r['output']['fasta'] = 'fas'
             r['output']['fastq'] = 'fastq'
         return r
-
-
     def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n"
                   ,timeout = 30):
         program = "blastn&MEGABLAST=on"
@@ -306,6 +304,24 @@ class NanoAct():
                     self._p(f"Error: {taxid} {e}")
                     pass
         return pool
+    def _funguild(self, org="Fusarium"):
+        #Check funguild
+        funguild_des = []
+        guild = None
+        notes = None
+        try:
+            funguild_des = json.loads(get(f"https://www.mycoportal.org/funguild/services/api/db_return.php?qDB=funguild_db&qField=taxon&qText={org}").text)
+        except Exception as e:
+            self._p(f"blast_result_pool[sample]['org'], load funguild failed {e}")
+        try:
+            guild = funguild_des[0]['guild']
+        except:
+            pass
+        try:
+            notes = funguild_des[0]['notes']
+        except:
+            pass
+        return guild, notes     
     def blast_2 (self, src, des, name="blast.csv", 
                  funguild = True, 
                  startswith="con_",
@@ -376,25 +392,18 @@ class NanoAct():
         for sample in blast_result_pool.keys():
             for key in blast_result_pool[sample].keys():
                 pool_df.loc[sample,key] = blast_result_pool[sample][key]
-
+            
             #Check funguild
-
             if funguild and blast_result_pool[sample]['org'] != "":
-                funguild_des = []
+                guild, notes = self._funguild(blast_result_pool[sample]['org'])
                 try:
-                    funguild_des = json.loads(get(f"https://www.mycoportal.org/funguild/services/api/db_return.php?qDB=funguild_db&qField=taxon&qText={blast_result_pool[sample]['org']}").text)
+                    pool_df.loc[sample,'funguild'] = guild
                 except:
                     pass
-                if funguild_des != []:
-                    #print(funguild_des)
-                    try:
-                        pool_df.loc[sample,'funguild'] = funguild_des[0]['guild']
-                    except:
-                        pass
-                    try:
-                        pool_df.loc[sample,'funguild_notes'] = funguild_des[0]['notes']
-                    except:
-                        pass
+                try:
+                    pool_df.loc[sample,'funguild_notes'] = notes
+                except:
+                    pass
         pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
         return f"{des}/{name}"
 
@@ -448,7 +457,6 @@ class NanoAct():
                     output_fastq = open(f"{des}/{filename}.{io_format['output']['fastq']}", "w")
                 if 'fasta' in io_format['output']:
                     output_fasta = open(f"{des}/{filename}.{io_format['output']['fasta']}", "w")
-
                 with open(f.path) as handle:
                     with open(f"{des}/{f.name}", "w") as output:
                         if f.name.endswith(".fastq"):
@@ -468,7 +476,7 @@ class NanoAct():
                             if 'fastq' in io_format['output']:
                                 output_fastq.write(f"@{record['title']}\n{record['seq']}\n+\n{record['qual']}\n")
         return des
-    def mafft_consensus (self, src, des, minimal_reads=0, input_format="fasta"):
+    def mafft_consensus (self, src, des, minimal_reads=0, input_format="fas"):
         try:
             os.makedirs(des)
         except:
@@ -1548,33 +1556,30 @@ class NanoAct():
         #fill nan with 0
         df.fillna(0, inplace=True)
         return df
-    def random_sampler(self, src, des, input_format='fasta', output_format='fasta', ratio=0.2):
-        self._check_input_ouput(input_format, output_format)
+    def random_sampler(self, src, des, input_format='fastq', output_format='both', ratio=0.2):
+        io_format = self._check_input_ouput(input_format, output_format)
         with open(src, 'r') as handle:
-            if input_format == 'fasta':
+            SampleID, ext = os.path.splitext(os.path.basename(src))
+            ext = ext[1:]
+            if ext in self.fasta_ext:
                 seqs = self._fasta_reader(handle)
-            if input_format == 'fastq':
+            elif ext in self.fastq_ext:
                 seqs = self._fastq_reader(handle)
-            if output_format == 'fasta' or output_format == 'both':
-                fasta_handle = open(des + ".fas", 'w')
-            if output_format == 'fastq' or output_format == 'both':
-                fastq_handle = open(des + ".fastq", 'w')
+            if 'fastq' in io_format['output']:
+                fastq_handle = open(f"{des}/{SampleID}_{ratio}.{io_format['output']['fastq']}", 'w')
+            if 'fasta' in io_format['output']:
+                fasta_handle = open(f"{des}/{SampleID}_{ratio}.{io_format['output']['fasta']}", 'w')
             total = 0
             sampled = 0
             for seq in seqs:
                 if random() < ratio:
-                    if output_format == 'fasta' or output_format == 'both':
+                    if 'fasta' in io_format['output']:
                         fasta_handle.write(f">{seq['title']}\n{seq['seq']}\n")
-                    if output_format == 'fastq' or output_format == 'both':
+                    if 'fastq' in io_format['output']:
                         fastq_handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
                     sampled += 1
                 total += 1
-            #close file handles
-            if output_format == 'fasta' or output_format == 'both':
-                fasta_handle.close()
-            if output_format == 'fastq' or output_format == 'both':
-                fastq_handle.close()
-            print(f"Total reads: {total}, sampled reads: {sampled}, ratio: {sampled/total}")
+            self._p(f"Total reads: {total}, sampled reads: {sampled}, ratio: {sampled/total}")
     def region_extract (self, src, des, input_format='fastq', output_format='both', 
                         splicer={"start":("TCATTTAGAG","GCCCGTCGCT","GAAGTAAAAG","TCGTAACAAG"),
                                  "end":("GCTGAACTTA","GCATATCAA","ATCAATAAGCG","AAGCGGAGGA")
@@ -1764,6 +1769,172 @@ class NanoAct():
                 title = title.replace(" ", "_")
                 f.write(">{}\n{}\n".format(title, rec["seq"]))  
         return f"{des}/{name}.fas"     
+    def _prepare_ref_db(self, 
+                        des = "",
+                        custom_acc=[],
+                        custom_gbff=[],
+                        ref_db = ['fungi.ITS','bacteria.16SrRNA'],
+                        ):
+        if des == "":
+            des = f"{self.TEMP}/ref_db.fas"
+
+        custom_fas = []
+        #Download custom_db
+        if custom_acc != []:
+            self._p("Downloading custom database from NCBI...")
+            cus_des = f"{self.TEMP}/custom_db.gbff"
+            gbff = ""
+            #Download 100 acc at a time
+            for i in range(0, len(custom_acc), 100):
+                gbff += self._get_gbff_by_acc(custom_acc[i:i+100])
+            with open(cus_des, 'w') as f:
+                f.write(gbff)
+            fas = self._gbffgz_to_taxfas(cus_des, self.TEMP)
+            custom_fas.append(fas)
+        #Download custom_gbff
+        if custom_gbff != []:
+            self._p("Downloading custom gbff file from NCBI...")
+            for gbff_URI in custom_gbff:
+                gbff_path = self._gbffgz_download(gbff_URI, self.TEMP)
+                fas = self._gbffgz_to_taxfas(gbff_path, self.TEMP)
+                custom_fas.append(fas)
+        #Merge custom_fas and fas.gz in refdb folder into {self.TEMP}/ref_db.fas
+        self._p("Merging custom database and ref_db...")
+        with open(des, 'w') as handle:
+            #Load ref_db from https://github.com/Raingel/nanoact_refdb/raw/master/refdb/
+            for r in ref_db:
+                try:
+                    self._p(f"Downloading ref_db: {r}")
+                    r_URI = f"https://github.com/Raingel/nanoact_refdb/raw/master/refdb/{r}.fas.gz"
+                    #Check if file exists
+                    r_path = f"{self.TEMP}/{r}.fas.gz"
+                    if not os.path.isfile(r_path):
+                        r = get(r_URI, allow_redirects=True)
+                        open(r_path, 'wb').write(r.content)
+                    #Write content of r to handle
+                    with gzip.open(r_path, 'rb') as f_in:
+                        handle.write(f_in.read().decode("utf-8"))
+                except Exception as e:
+                    self._p(f"Error: {r}.fas.gz load failed.")
+            #Load custom_db
+            for f in custom_fas:
+                with open(f, 'r') as f:
+                    handle.write(f.read())
+        self._p(f"ref_db prepared at: {des}")
+        return des
+    def local_blast (self,
+                     src,
+                     des,
+                     name = "blast.csv",
+                     startswith="con_",
+                     input_format = 'fastq',
+                     custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
+                    custom_gbff = [],
+                    suppress_mmseqs_output = True,
+                     ):
+        
+        des = os.path.abspath(des)
+        #clean temp folder
+        #self._clean_temp()
+        try:
+            os.mkdir(des)
+        except:
+            pass
+        #Prepare ref_db
+        ref_db = self._prepare_ref_db( 
+                        des = "",
+                        custom_acc=custom_acc,
+                        custom_gbff=custom_gbff,
+                        ref_db = ['fungi.ITS','bacteria.16SrRNA'],
+                        )
+        #Merge all seq from src into one file
+        self._p("Preparing query file...")
+        query = f"{self.TEMP}/query.fas"
+        query_handle = open(query, 'w')
+        file_count = 0
+        rec_count = 0
+        query_tmp = {}
+        for f in os.scandir(src):
+            SampleID, ext = os.path.splitext(f.name)
+            ext = ext[1:]
+            if ext == input_format and f.name.startswith(startswith):
+                with open(f.path) as handle:
+                    if ext in self.fastq_ext:
+                        recs = self._fastq_reader(handle)
+                    elif ext in self.fasta_ext:
+                        recs = self._fasta_reader(handle)
+                    else:
+                        raise Exception("Input format not supported")
+                    for rec in recs:
+                        query_handle.write(">{}\n{}\n".format(rec["title"], rec["seq"]))
+                        query_tmp[rec["title"]] = rec["seq"]
+                        rec_count += 1
+                file_count += 1
+        query_handle.close()
+        self._p(f"Query file prepared. {rec_count} reads from {file_count} files.")
+
+
+        #Binary path
+        mmseqs = f"{self.lib_path}/bin/mmseqs"
+        self._p("Running mmseqs easy-search...")
+        self._exec(f"{mmseqs}  easy-search {query} {ref_db} {self.TEMP}/result.m8 {self.TEMP}/tmp --search-type 3", suppress_output=suppress_mmseqs_output)
+        #Post process result.m8
+        self._p("Post processing result.m8...")
+        try:
+            res_m8 = pd.read_csv(f"{self.TEMP}/result.m8", sep="\t", header=None)
+            res_m8.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
+            res_m8 = res_m8.sort_values(by=["qseqid", "bitscore"], ascending=[True, False])
+            res_m8 = res_m8.drop_duplicates(subset=["qseqid"], keep="first")
+        except:
+            self._p("Post processing failed. Please turn off suppress_mmseqs_output and check mmseqs output.")
+            return des
+        
+        #Reorganize result.m8
+        #title	seq	length	sample	cluster_no	reads_count	acc	hit_seq	hit_def	similarity	org	taxid	kingdom	phylum	class	order	family	genus	funguild	funguild_notes
+        new_res_m8 = pd.DataFrame()
+        for index, row in res_m8.iterrows():
+            new_res_m8.loc[index, 'title'] = row['qseqid']
+            new_res_m8.loc[index, 'seq'] = query_tmp[row['qseqid']]
+            new_res_m8.loc[index, 'length'] = len(query_tmp[row['qseqid']])
+            try:
+                #T10_cluster_0_r7
+                sample, _, cluster_no, read_no = row['qseqid'].split("_")
+                new_res_m8.loc[index, 'sample'] = sample
+                new_res_m8.loc[index, 'cluster_no'] = cluster_no
+                new_res_m8.loc[index, 'reads_count'] = read_no.replace("r", "")
+            except Exception as e:
+                #self._p(f"Error: {row['sseqid']} split failed.")
+                new_res_m8.loc[index, 'sample'] = ""
+                new_res_m8.loc[index, 'cluster_no'] = ""
+                new_res_m8.loc[index, 'reads_count'] = ""
+            try:
+                #>NR_175125||Lasionectria_atrorubra||Fungi;Ascomycota;Sordariomycetes;Hypocreales;Nectriaceae;Lasionectria||2082544
+                acc, hit_def, lineage, taxid = row['sseqid'].split("||")
+                kingdom, phylum, class_, order, family, genus = lineage.split(";")
+            except:
+                acc, hit_def, lineage, taxid = "", "", "", ""
+                kingdom, phylum, class_, order, family, genus = "", "", "", "", "", ""
+            new_res_m8.loc[index, 'acc'] = acc
+            new_res_m8.loc[index, 'hit_def'] = hit_def
+            new_res_m8.loc[index, 'similarity'] = row['pident']
+            new_res_m8.loc[index, 'org'] = hit_def
+            new_res_m8.loc[index, 'taxid'] = taxid
+            new_res_m8.loc[index, 'kingdom'] = kingdom
+            new_res_m8.loc[index, 'phylum'] = phylum
+            new_res_m8.loc[index, 'class'] = class_
+            new_res_m8.loc[index, 'order'] = order
+            new_res_m8.loc[index, 'family'] = family
+            new_res_m8.loc[index, 'genus'] = genus
+            guild, notes = self._funguild(hit_def) 
+            new_res_m8.loc[index, 'funguild'] = guild
+            new_res_m8.loc[index, 'funguild_notes'] = notes
+        #remove index
+        new_res_m8.to_csv(f"{des}/{name}", index=False)
+        return f"{des}/{name}"
+
+
+
+
     def taxonomy_assign(self, src, des, 
                         input_format='fastq',
                         lca_mode = 3, 
@@ -1796,50 +1967,13 @@ class NanoAct():
             os.mkdir(des)
         except:
             pass
-        #Download custom_db
-        if custom_acc != []:
-            self._p("Downloading custom database from NCBI...")
-            cus_des = f"{self.TEMP}/custom_db.gbff"
-            gbff = ""
-            #Download 100 acc at a time
-            for i in range(0, len(custom_acc), 100):
-                gbff += self._get_gbff_by_acc(custom_acc[i:i+100])
-            with open(cus_des, 'w') as f:
-                f.write(gbff)
-            fas = self._gbffgz_to_taxfas(cus_des, self.TEMP)
-            custom_fas.append(fas)
-        #Download custom_gbff
-        if custom_gbff != []:
-            self._p("Downloading custom gbff file from NCBI...")
-            for gbff_URI in custom_gbff:
-                gbff_path = self._gbffgz_download(gbff_URI, self.TEMP)
-                fas = self._gbffgz_to_taxfas(gbff_path, self.TEMP)
-                custom_fas.append(fas)
-
-
-        
-        #Merge custom_fas and fas.gz in refdb folder into {self.TEMP}/ref_db.fas
-        self._p("Merging custom database and ref_db...")
-        with open(f"{self.TEMP}/ref_db.fas", 'w') as handle:
-            #Load ref_db from https://github.com/Raingel/nanoact_refdb/raw/master/refdb/
-            for r in ref_db:
-                try:
-                    self._p("Downloading ref_db: ", r)
-                    r_URI = f"https://github.com/Raingel/nanoact_refdb/raw/master/refdb/{r}.fas.gz"
-                    #Check if file exists
-                    r_path = f"{self.TEMP}/{r}.fas.gz"
-                    if not os.path.isfile(r_path):
-                        r = get(r_URI, allow_redirects=True)
-                        open(r_path, 'wb').write(r.content)
-                    #Write content of r to handle
-                    with gzip.open(r_path, 'rb') as f_in:
-                        handle.write(f_in.read().decode("utf-8"))
-                except Exception as e:
-                    self._p(f"Error: {r}.fas.gz load failed.")
-            #Load custom_db
-            for f in custom_fas:
-                with open(f, 'r') as f:
-                    handle.write(f.read())
+        #Prepare ref_db
+        ref_db = self._prepare_ref_db( 
+                        des = "",
+                        custom_acc=custom_acc,
+                        custom_gbff=custom_gbff,
+                        ref_db = ['fungi.ITS','bacteria.16SrRNA'],
+                        )
 
         #Binary path
         mmseqs = f"{self.lib_path}/bin/mmseqs"
@@ -1848,7 +1982,7 @@ class NanoAct():
         if mode == 'lca':
             #build db
             self._p("Building ref_db from ref_db.fas...")
-            self._exec(f'{mmseqs} createdb {self.TEMP}/ref_db.fas {self.TEMP}/ref_db', suppress_output=suppress_mmseqs_output)
+            self._exec(f'{mmseqs} createdb {ref_db} {self.TEMP}/ref_db', suppress_output=suppress_mmseqs_output)
             #Edit lookup table to include taxonomic information
             with open(f"{self.TEMP}/ref_db.lookup", "r") as f:
                 lines = f.readlines()
@@ -1892,45 +2026,11 @@ class NanoAct():
             self._p(f"Processing file: {f.name}")
             #Prepare query and db file
             query = f"{self.TEMP}/query.fas"
-            db = f"{self.TEMP}/ref_db.fas"
             with open(query, 'w') as f:
                 for seq in seqs:
                     f.write(">{}\n{}\n".format(seq["title"], seq["seq"]))
             #DEPRECATED: mmseqs easy-search 
-            if mode == 'easy-search':
-                self._exec(f"{mmseqs} easy-search {query} {db} {des}/{SampleID}.m8 {self.TEMP}/tmp --search-type 3 -a -s 7.5", 
-                        suppress_output=suppress_mmseqs_output)
-                #Parse m8 file
-                self._p(f"Processing m8 file: {des}/{SampleID}.m8")
-                try:
-                    m8_df = pd.read_csv(f"{des}/{SampleID}.m8", sep="\t", header=None)
-                except Exception as e:
-                    self._p(f"Error: {f.name} m8 file load failed.")
-                    continue
-                m8_df.columns = ["qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore"]
-                #Remove duplicate qseqid, only preserve the hightest evalue
-                m8_df = m8_df.sort_values(by=['qseqid', 'evalue'])
-                m8_df = m8_df.drop_duplicates(subset=['qseqid'], keep='first')
-                for index, row in m8_df.iterrows():
-                    if row["evalue"] > evalue_thres:
-                        #Set to Unclassified if evalue > evalue_thres
-                        m8_df.loc[index, "kingdom"] = "Unclassified"
-                        m8_df.loc[index, "phylum"] = "Unclassified"
-                        m8_df.loc[index, "class"] = "Unclassified"
-                        m8_df.loc[index, "order"] = "Unclassified"
-                        m8_df.loc[index, "family"] = "Unclassified"
-                        m8_df.loc[index, "genus"] = "Unclassified"
-                    else:
-                        lineage = row['sseqid'].split('||')[2].split(';')
-                        m8_df.loc[index, "kingdom"] = lineage[0]
-                        m8_df.loc[index, "phylum"] = lineage[1]
-                        m8_df.loc[index, "class"] = lineage[2]
-                        m8_df.loc[index, "order"] = lineage[3]
-                        m8_df.loc[index, "family"] = lineage[4]
-                        m8_df.loc[index, "genus"] = lineage[5]       
-                #Write to csv
-                m8_df.to_csv(f"{des}/{SampleID}_taxonomyassignment.csv", index=False)
-            elif mode == 'lca':
+            if  mode == 'lca':
                 #Create query db
                 self._exec(f"{mmseqs} createdb {query} {self.TEMP}/{SampleID}_query_db", suppress_output=suppress_mmseqs_output)
                 #Run lca
@@ -2056,7 +2156,8 @@ class NanoAct():
             #Save to file
             fig.savefig(f"{des}/{SampleID}.{img_ext}", bbox_inches='tight')
         return {des}
-    def taxonomy_assign_visualizer(self, src, des, minimal_reads=1,vertical_scale=0.8):
+    #Deprecated
+    def _taxonomy_assign_visualizer(self, src, des, minimal_reads=1,vertical_scale=0.8):
         from sankeyflow import Sankey
         for f in os.scandir(src):
             if f.name.endswith("_taxonomyassignment.csv"):
