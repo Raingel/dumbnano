@@ -1981,7 +1981,7 @@ class NanoAct():
                         des = "",
                         custom_acc=custom_acc,
                         custom_gbff=custom_gbff,
-                        ref_db = ['fungi.ITS','bacteria.16SrRNA'],
+                        ref_db = ref_db,
                         )
 
         #Binary path
