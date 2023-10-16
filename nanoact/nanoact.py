@@ -918,6 +918,7 @@ class NanoAct():
         return des
     def distance_matrix(self, path, TRUNCATE_HEAD_TAIL = True):
         SampleID, ext = os.path.splitext(os.path.basename(path))
+        ext = ext[1:]
         with open(path, 'r') as infile:
             if ext in self.fastq_ext:
                 raw = list(self._fastq_reader(infile))
@@ -950,34 +951,36 @@ class NanoAct():
                 input_format = "fastq",
                 output_format = "both",
                 min_cluster_size = 0.3, mds = True):
-        self._check_input_ouput(input_format=input_format, output_format=output_format)
+        io_format = self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
-            print(e)
+            self._p(e)
             pass
+        abs_des = os.path.abspath(des)
         for f in os.scandir(src):
             SampleID, ext = os.path.splitext(os.path.basename(f.name))
-            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
-                pass
-            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+            ext = ext[1:]
+            if f.is_file() and ext == io_format['input']:
                 pass
             else:
-                continue 
+                self._p(ext, io_format['input'])
+                self._p(f"{f.name} is not in the accepted input format, skipping")
+                continue
             clustered_seq = {}
-            print("Clustering {}".format(f.name))
+            self._p("Clustering {}".format(f.name))
             #Read, calculate distance matrix, cluster
             dm = self.distance_matrix(f.path)
             #cluster size is relative to the number of sequences
             #if the number of sequences is small, use absolute cluster size (2)
             abs_cluster_size = max(2,int(dm.shape[0]*min_cluster_size))
-            print("abs_cluster_size: ", abs_cluster_size)
+            self._p(f"abs_cluster_size: {abs_cluster_size}")
             try:
                 labels = self._hdbscan(dm, abs_cluster_size) #Use relative_cluster_size
                 #print(f.name, labels)
             except Exception as e:
-                print(e)
-                print("Clustering failed")
+                self._p(e)
+                self._p("Clustering failed")
                 continue
             #Organize sequences by cluster
             with open(f.path, 'r') as infile:
@@ -990,10 +993,10 @@ class NanoAct():
                     clustered_seq[l] = []
                 clustered_seq[l].append(seqs[i])
             infile.close()
-            print ("Number of clusters:", len(clustered_seq))
+            self._p(f"Number of clusters: {len(clustered_seq)}")
             #Write to file
             for l in clustered_seq:
-                with open(f"{des}/{f.name[:-4]}_cluster_{l}_r{len(clustered_seq[l])}.fas", 'w') as outfile:
+                with open(f"{abs_des}/{SampleID}_cluster_{l}_r{len(clustered_seq[l])}.fas", 'w') as outfile:
                     for s in clustered_seq[l]:
                         outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
             #Visualize cluster result with mds
