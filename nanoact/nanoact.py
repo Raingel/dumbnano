@@ -413,8 +413,9 @@ class NanoAct():
 
     def _mafft (self, src, des):
         mafft_bin = self._lib_path() + "/bin/mafft.bat"
+        #Make mafft to auto adjust direction
         #./mafft.bat --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
-        cmd = f"{mafft_bin} {src} > {des}"
+        cmd = f"{mafft_bin} --adjustdirection {src} > {des}"
         self._exec(cmd,suppress_output=True)
     def _gblock (self, fas):
         try:
@@ -484,9 +485,12 @@ class NanoAct():
                 self._p(f"Processing {f.name}")
                 FAS = f.path
                 filename = os.path.basename(FAS)
-                SampleID = filename.split("_")[1]
-                original_cluster = filename.split("_")[3]
-                original_prefix = "_".join(filename.split("_")[0:3])
+                try:
+                    SampleID = filename.split("_")[1]
+                    original_cluster = filename.split("_")[3]
+                    original_prefix = "_".join(filename.split("_")[0:3])
+                except:
+                    self._p(f"Failed to parse {filename}, skipping. Make sure the filename is in the format of aln_[SampleID]_cluster_[number]_r[number].{io_format['input']}")
                 #Read MSA_gblocked as 2D numpy array
                 MSA_gblocked = []
                 titles = []
