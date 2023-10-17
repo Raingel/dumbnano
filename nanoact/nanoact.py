@@ -139,7 +139,7 @@ class NanoAct():
                 while True:
                     line = handle.readline()
                     if not line or line[0] == ">":
-                        yield {"title": title, "seq": seq}
+                        yield {"title": title, "seq": seq.replace(" ","")}
                         break
                     else:
                         seq += line.rstrip()
@@ -416,6 +416,151 @@ class NanoAct():
         #./mafft.bat --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
         cmd = f"{mafft_bin} {src} > {des}"
         self._exec(cmd,suppress_output=True)
+    def _gblock (self, fas):
+        try:
+            #try copy input file to temp folder
+            shutil.copy(fas, self.TEMP)
+            fas = f"{self.TEMP}/{os.path.basename(fas)}"
+            self._p(f"Copy {fas} to {self.TEMP} success, running Gblocks")
+        except:
+            self._p(f"Copy {fas} to {self.TEMP} failed")
+        gblock_bin = self._lib_path() + "/bin/Gblocks"
+        #command = [bin, input_path, "-t=d", "-b5=a", f"-e={output_ext}"] # -t=d: DNA, -b5=a: 保留所有gap, -e: 輸出檔案的副檔名
+        cmd = [gblock_bin, fas, "-t=d", "-b5=a", "-e=gblo"]
+        cmd_line = " ".join(cmd)
+        self._p(f"Running {cmd_line}")
+        self._exec(cmd_line,suppress_output=True)
+        output_path = f"{fas}gblo"
+        #Replace space in the sequences
+        seq_wo_space = ""
+        with open(output_path, 'r') as handle:
+            for rec in self._fasta_reader(handle):
+                seq_wo_space += f">{rec['title']}\n{rec['seq'].replace(' ','')}\n"
+        with open(output_path, 'w') as handle:
+            handle.write(seq_wo_space)
+        return output_path
+    def diplod_site (self, MSA, threshold = 0.2):
+        diploid_site = []
+        #Check the nucleotides frequencies for each position
+        from collections import Counter
+        freqs = []
+        for i in range(MSA.shape[1]):
+            c = Counter(MSA[:,i])
+            f = []
+            for n in "ATCG": #"-ATCG" for gapped sequences
+                ratio = c[n]/MSA.shape[0]
+                f.append(ratio)
+            #If the second largest frequency is larger than THRESHOLD, it is a diploid site
+            if sorted(f)[-2] > threshold:
+                diploid_site.append(i)
+            freqs.append(f)
+        freqs = np.array(freqs)
+        MSA_diploid = MSA[:,diploid_site]
+        return MSA_diploid, diploid_site
+    def diploid_cluster (self, src, des, 
+                         input_format = "fas", 
+                         output_format = "fas"
+                         ):
+        #這個分群方法是被設計用在常規的分群(mmseqs2, hdbscan)後，若有雙型性的序列未被分出來。進行更精細的分群用的(也可能有更高的偽陽性)。他的輸入資料夾必須是經過mafft_consensus的結果，裡面必須包含aln_開頭的，已align過的檔案
+        #This clustering method is designed to be used after the regular clustering (mmseqs2, hdbscan), if there are sequences with haplotypes that are not separated.
+        #The input folder must be the result of mafft_consensus, which must contain the files that have been aligned and start with aln_
+        io_format = self._check_input_ouput(input_format, output_format)
+        try:
+            os.makedirs(des, exist_ok=True)
+        except:
+            pass     
+        #Read fasta file
+        for f in os.scandir(src):
+            #Get filename without extension
+            if f.is_file():
+                filename,ext = os.path.splitext(f.name)
+                ext = ext[1:]
+                if ext != io_format['input']:
+                    self._p(f"{f.name} is not in the accepted input format, skipping")
+                    continue
+                if not f.name.startswith("aln_"):
+                    self._p(f"{f.name} is not an aligned file starting with aln_, skipping")
+                    continue
+                self._p(f"Processing {f.name}")
+                FAS = f.path
+                filename = os.path.basename(FAS)
+                SampleID = filename.split("_")[1]
+                original_cluster = filename.split("_")[3]
+                original_prefix = "_".join(filename.split("_")[0:3])
+                #Read MSA_gblocked as 2D numpy array
+                MSA_gblocked = []
+                titles = []
+                for rec in self._fasta_reader(open(FAS)):
+                    titles.append(rec['title'])
+                    MSA_gblocked.append(list(rec['seq'].upper()))
+                #Convert to numpy array
+                try:
+                    MSA_gblocked = np.array(MSA_gblocked)
+                #If inhomogeneous length, exit
+                except ValueError:
+                    print("Failed to read MSA. Are all sequences the same length?")
+                MSA_diploid, diploid_site = self.diplod_site(MSA_gblocked, 0.2)
+                #Initialize temp folder
+                try:
+                    shutil.rmtree(self.TEMP+"/MSA_diploid")
+                except FileNotFoundError:
+                    pass
+                try:
+                    shutil.rmtree(self.TEMP+"/MSA_gblocked_labeled")
+                except FileNotFoundError:
+                    pass
+                try:
+                    shutil.rmtree(self.TEMP+"/MSA_diploid_cluster")
+                except FileNotFoundError:
+                    pass
+                #save MSA_diploid to temp
+                os.makedirs(self.TEMP+"/MSA_diploid", exist_ok=True)
+                with open(self.TEMP+"/MSA_diploid/MSA_diploid.fas", "w") as f:
+                    for i in range(len(MSA_diploid)):
+                        f.write(">"+titles[i]+"\n")
+                        f.write("".join(MSA_diploid[i])+"\n")
+                #Save MSA_gblocked to temp, diploid sites is labeled as lower case
+                os.makedirs(self.TEMP+"/MSA_labeled", exist_ok=True)
+                for d in diploid_site:
+                    MSA_gblocked[:,d] = list("".join(MSA_gblocked[:,d]).lower())
+                with open(self.TEMP+"/MSA_labeled/MSA_labeled.fas", "w") as f:
+                    for i in range(len(MSA_gblocked)):
+                        f.write(">"+titles[i]+"\n")
+                        f.write("".join(MSA_gblocked[i])+"\n")
+                self.hdbscan(self.TEMP+"/MSA_diploid",self.TEMP+"/MSA_diploid_cluster",
+                input_format = "fas",
+                output_format = "fas",
+                min_cluster_size = 0.1, mds = False)
+                #Save new clustered seq based on cluster number
+                #Read original sequences
+                original_seq = {}
+                for rec in self._fasta_reader(open(FAS)):
+                    title = rec['title']
+                    seq = rec['seq']
+                    original_seq[title] = seq
+                for f in os.scandir(self.TEMP + "/MSA_diploid_cluster"):
+                    if f.name.endswith(".fas"):
+                        print(f.name)
+                        #MSA_diploid_cluster_1_r650.fas
+                        cluster_number = f.name.split("_")[3]
+                        #Count reads in each cluster
+                        reads_count = 0
+                        output = ""
+                        for rec in self._fasta_reader(open(f.path)):
+                            title = rec['title']
+                            #seq = rec['seq']
+                            output += ">"+title+"\n"
+                            output += original_seq[title]+"\n"
+                            reads_count+=1
+                        #TC_cluster_57_r1183
+                        clusterID = f"{SampleID}_cluster_{original_cluster}-{cluster_number}_r{reads_count}"
+                        new_aln = f"aln_{clusterID}.{io_format['output']['fasta']}"
+                        new_con = f"con_{clusterID}.{io_format['output']['fasta']}"
+                        with open(f"{des}/{new_aln}", "w") as fw:
+                            fw.write(output)
+                        self._naive_consensus(f"{des}/{new_aln}",f"{des}/{new_con}",clusterID)
+
+
     def orientation(self, src, des, 
                     input_format = "fastq",
                     output_format = "both",
@@ -519,20 +664,21 @@ class NanoAct():
                 #Align sequences
                 self._p(f"Working on {SampleID} ...")
                 self._mafft(fas_path, f"{abs_des}/aln_{SampleID}.fas")
-                #naive consensus
-                with open(f"{abs_des}/aln_{SampleID}.fas") as handle:
-                    records = list(self._fasta_reader(handle))
-                    consensus = ""
-                    for i in range(len(records[0]['seq'])):
-                        col = [r['seq'][i] for r in records]
-                        #get_most_common
-                        com = Counter(col).most_common(1)[0][0]
-                        if com != "-":
-                            consensus += com
-                    with open(f"{abs_des}/con_{SampleID}.fas", "w") as out:
-                        out.write(f">{SampleID}\n{consensus}")
-
+                self._naive_consensus(f"{abs_des}/aln_{SampleID}.fas", f"{abs_des}/con_{SampleID}.fas", SampleID)
         return abs_des
+    def _naive_consensus (self, src, des, title):
+        #naive consensus
+        with open(src) as handle:
+            records = list(self._fasta_reader(handle))
+            consensus = ""
+            for i in range(len(records[0]['seq'])):
+                col = [r['seq'][i] for r in records]
+                #get_most_common
+                com = Counter(col).most_common(1)[0][0]
+                if com != "-":
+                    consensus += com
+            with open(des, "w") as out:
+                out.write(f">{title}\n{consensus}")
     def _get_sample_id_single (self, seq, barcode_hash_table, search_range=150, mismatch_ratio_f = 0.15,mismatch_ratio_r = 0.15):
         # Define a helper function to identify the sample ID of a sequence read based on its barcode
         ids = []
@@ -931,7 +1077,7 @@ class NanoAct():
                 except Exception as e:
                     1
                     #print("Labeled HEAD not found in ", s['title'])
-        print("Number of records:", len(raw))
+        self._p(f"Number of records: {len(raw)}")
         #Create distance matrix
         #fill with -1
         dm = np.full((len(raw), len(raw)), 0)
@@ -1001,7 +1147,7 @@ class NanoAct():
                         outfile.write(">{}\n{}\n".format(s['title'],s['seq']))
             #Visualize cluster result with mds
             if mds:
-                dm_norm = dm / dm.max()
+                dm_norm = dm / (dm.max()+0.01)
                 mds = MDS(n_components=2,random_state=5566, dissimilarity='precomputed', normalized_stress="auto")
                 mds_results = mds.fit_transform(dm_norm)
                 fig, ax = plt.subplots(figsize=(15,15))
