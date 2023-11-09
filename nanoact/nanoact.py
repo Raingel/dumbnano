@@ -362,6 +362,8 @@ class NanoAct():
         #set title as index
         pool_df.set_index('title', inplace=True)
         for index, row in pool_df.iterrows():
+            #Create fasta type seq
+            pool_df.loc[index, 'fasta'] = f">{index}\n{row['seq']}\n"
             pool_df.loc[index, 'length'] = str(len(row['seq']))
             try:
                 #2110_cluster_-1_r2154.fas	
@@ -1016,13 +1018,23 @@ class NanoAct():
             return 0
         average_quality = sum(quality_scores) / len(quality_scores)
         return average_quality
-    def qualityfilt(self, src, des, name="all.fastq", QSCORE = 8, MIN_LEN = 400, MAX_LEN = 8000):
+    def qualityfilt(self, src, des, name="all.fastq", 
+                    QSCORE = 8, 
+                    MIN_LEN = 400, 
+                    MAX_LEN = 8000,
+                    SEARCH_SEQ = [""], #Search if specific DNA sequence is present in the read
+                    EDIT_DISTANCE = 0, #Edit distance allowed for the search sequence, Only works if SEARCH_SEQ is not empty
+                    ):
         try:
             os.makedirs(des, exist_ok=True)
         except Exception as e:
             pass
         self._p("Start Qualityfilt...")
         self._p(f"QSCORE: {QSCORE}, MIN_LEN: {MIN_LEN}, MAX_LEN: {MAX_LEN}")
+        if SEARCH_SEQ:
+            self._p("SEARCH_SEQ is defined, searching for specific DNA sequence")
+            #Convert SEARCH_SEQ to uppercase
+            SEARCH_SEQ = [s.upper() for s in SEARCH_SEQ]
         des += f"/{name}"
         total = 0
         passed = 0
@@ -1030,7 +1042,18 @@ class NanoAct():
             with open(des, 'w') as outfile:
                 for rec in self._fastq_reader(infile):
                     total += 1
-                    if self._average_quality(rec['qual']) >= QSCORE and len(rec['seq']) >= MIN_LEN and len(rec['seq']) <= MAX_LEN:
+                    #Search if specific DNA sequence is present in the read
+                    SEARCH_FLAG = False
+                    rec['seq'] = rec['seq'].upper()
+                    if SEARCH_SEQ:
+                        for s in SEARCH_SEQ:
+                            if edlib.align(s, rec['seq'], mode="HW", task="locations")['editDistance'] <= EDIT_DISTANCE:
+                                SEARCH_FLAG = True
+                                break
+                    else:
+                        SEARCH_FLAG = True
+                    #Check if the read passed the quality filter
+                    if self._average_quality(rec['qual']) >= QSCORE and len(rec['seq']) >= MIN_LEN and len(rec['seq']) <= MAX_LEN and SEARCH_FLAG:
                         passed += 1
                         outfile.write(f"@{rec['title']}\n{rec['seq']}\n+\n{rec['qual']}\n")
                     print(f"{passed}/{total} ({passed/total*100:.2f}%) reads were passed quality filter", end="\r")
@@ -1788,7 +1811,9 @@ class NanoAct():
                         fastq_handle.write(f"@{seq['title']}\n{seq['seq'][start:end]}\n+\n{seq['qual'][start:end]}\n")
                     total_extracted += 1
 
-    def _get_gbff_by_acc(self, accession_no = ['LC729284','LC729293']):
+    def _get_gbff_by_acc(self, 
+        accession_no = ['LC729284','LC729293']
+        ):
         URI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id={}&rettype=gbwithparts&retmode=text'.format(",".join(accession_no))
         data = get(URI)
         return data.text   
@@ -1986,7 +2011,8 @@ class NanoAct():
                      startswith="con_",
                      input_format = 'fastq',
                      ref_db = ['fungi.ITS','bacteria.16SrRNA'],
-                     custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
+                     #custom_acc = ['LC729284', 'LC729293', 'LC729281', 'LC729294', 'LC729290', 'LC729267', 'LC729273'],
+                     custom_acc = [],
                     custom_gbff = [],
                     suppress_mmseqs_output = True,
                      ):
@@ -2055,10 +2081,11 @@ class NanoAct():
         for index, row in res_m8.iterrows():
             new_res_m8.loc[index, 'title'] = row['qseqid']
             new_res_m8.loc[index, 'seq'] = query_tmp[row['qseqid']]
+            new_res_m8.loc[index, 'fasta'] = f">{row['qseqid']}\n{query_tmp[row['qseqid']]}\n"
             new_res_m8.loc[index, 'length'] = len(query_tmp[row['qseqid']])
             try:
                 #T10_cluster_0_r7
-                sample, _, cluster_no, read_no = row['qseqid'].split("_")
+                sample, cluster_no, read_no = re.search("(.*)_cluster_([-0-9]+)_r(\d+)", row['qseqid']).groups()
                 new_res_m8.loc[index, 'sample'] = sample
                 new_res_m8.loc[index, 'cluster_no'] = cluster_no
                 read_no = read_no.replace("r", "")
