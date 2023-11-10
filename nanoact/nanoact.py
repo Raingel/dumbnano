@@ -1022,7 +1022,7 @@ class NanoAct():
                     QSCORE = 8, 
                     MIN_LEN = 400, 
                     MAX_LEN = 8000,
-                    SEARCH_SEQ = [""], #Search if specific DNA sequence is present in the read
+                    SEARCH_SEQ = [], #Search if specific DNA sequence is present in the read
                     EDIT_DISTANCE = 0, #Edit distance allowed for the search sequence, Only works if SEARCH_SEQ is not empty
                     ):
         try:
