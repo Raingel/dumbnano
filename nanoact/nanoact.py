@@ -962,7 +962,7 @@ class NanoAct():
             #Save to separate fastq file
             with open(path+".fastq", "w") as handle:
                 for record in pool[bin]:
-                    handle.write(record["title"] + "\n")
+                    handle.write("@" + record["title"] + "\n")
                     handle.write(record["seq"] + "\n")
                     handle.write("+" + "\n")
                     handle.write(record["qual"] + "\n")
