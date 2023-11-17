@@ -1224,6 +1224,9 @@ class NanoAct():
                         #Head regions are labeled by minibar as HEAD(uppercase)+barcode(lowercase)+SEQ WE NEED(uppercase)+barcode(lowercase)+TAIL(uppercase) 
                         r = re.search("([A-Z]+)([a-z]+)([A-Z]+)([a-z]+)([A-Z]+)", s['seq'])
                         s['seq'] = s['seq'][r.start(3)+fw_offset:r.end(3)-rv_offset]
+                        #If quality score is present, trim the quality score as well
+                        if "qual" in s:
+                            s['qual'] = s['qual'][r.start(3)+fw_offset:r.end(3)-rv_offset]
                         if output_format in  ["fasta", "both"]:
                             outfile_fasta.write(">{}\n{}\n".format(s['title'],s['seq']))
                         if output_format in  ["fastq", "both"]:
@@ -1316,6 +1319,9 @@ class NanoAct():
                     if (fw['locations'] != []):
                         trimmed_F += 1
                         s['seq'] = s['seq'][fw['locations'][0][1]+1+fw_offset:]
+                        #If quality score is present, trim the quality score as well
+                        if "qual" in s:
+                            s['qual'] = s['qual'][fw['locations'][0][1]+1+fw_offset:]
                         seq_upper = s['seq'].upper()
                     rv = edlib.align(rv_trim, seq_upper[-search_range:]
                                      , mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
@@ -1323,16 +1329,24 @@ class NanoAct():
                         trimmed_R += 1
                         splice_site = len(s['seq']) - search_range + rv['locations'][0][0] - rv_offset
                         s['seq'] = s['seq'][:splice_site]
+                        #If quality score is present, trim the quality score as well
+                        if "qual" in s:
+                            s['qual'] = s['qual'][:splice_site]
                     #If fw_trim and rv_trim are not found, check the reverse complement sequence
                     if (fw['locations'] == []) and (rv['locations'] == []) and check_both_directions:
                         s['seq'] = self._reverse_complement(s['seq'])
+                        #if quality score is present, reverse it as well
+                        if "qual" in s:
+                            s['qual'] = s['qual'][::-1]
                         seq_upper = s['seq'].upper()
                         fw = edlib.align(fw_trim, seq_upper[:search_range]
                                          , mode="HW", task="locations", k=int(len(fw_trim)*mismatch_ratio_f))
                         if (fw['locations'] != []):
-                            
                             trimmed_F += 1
                             s['seq'] = s['seq'][fw['locations'][0][1]+1+fw_offset:]
+                            #If quality score is present, trim the quality score as well
+                            if "qual" in s:
+                                s['qual'] = s['qual'][fw['locations'][0][1]+1+fw_offset:]
                             seq_upper = s['seq'].upper()
                         rv = edlib.align(rv_trim, seq_upper[-search_range:]
                                          , mode="HW", task="locations", k=int(len(rv_trim)*mismatch_ratio_r))
@@ -1340,6 +1354,9 @@ class NanoAct():
                             trimmed_R += 1
                             splice_site = len(s['seq']) - search_range + rv['locations'][0][0] - rv_offset
                             s['seq'] = s['seq'][:splice_site]
+                            #If quality score is present, trim the quality score as well
+                            if "qual" in s:
+                                s['qual'] = s['qual'][:splice_site]
                         #If fw_trim and rv_trim are still not found, discard the sequence if discard_no_match is True
                         if (fw['locations'] == []) and (rv['locations'] == []) and discard_no_match:
                             continue
