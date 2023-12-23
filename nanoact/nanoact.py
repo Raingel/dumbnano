@@ -17,6 +17,7 @@ from collections import Counter
 import urllib.parse
 import time
 from random import random
+from random import sample as random_sample
 import tarfile
 # %%
 class NanoAct():
@@ -235,6 +236,8 @@ class NanoAct():
                     break
                 else:
                     self._p("No hits found.")
+                    break
+
         # retrieve and display results
         url = f'https://blast.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&RID={rid}&FORMAT_TYPE=XML'
         self._p(f"Retrieving results from {url}")
@@ -573,7 +576,7 @@ class NanoAct():
                     BARCODE_INDEX_FILE = "",
                     FwPrimer = "FwPrimer",
                     RvPrimer = "RvPrimer",
-                    search_range=200):
+                    search_range=500):
         #Input: a folder containing all the fas files, fas_file should be named as {sample_id}.fas
         #Input2: a barcode index file, containing following columns: SampleID, FwPrimer, RvPrimer
         #input_format: fastq or fasta or both
@@ -631,7 +634,15 @@ class NanoAct():
                             if 'fastq' in io_format['output']:
                                 output_fastq.write(f"@{record['title']}\n{record['seq']}\n+\n{record['qual']}\n")
         return des
-    def mafft_consensus (self, src, des, minimal_reads=0, input_format="fas"):
+    def mafft_consensus (self, src, 
+                         des, 
+                         minimal_reads=0, 
+                         input_format="fas",
+                         #If there are too many reads, the alignment will be very slow
+                         #Set max_reads to limit the number of reads to be aligned
+                         #Random sampling will be performed if the number of reads exceeds max_reads
+                         max_reads=10000
+                         ):
         try:
             os.makedirs(des)
         except:
@@ -644,6 +655,10 @@ class NanoAct():
             if f.is_file():
                 if ext != input_ext['input']:
                     self._p(f"{f.name} is not in the accepted input format, skipping")
+                    continue
+                #Check if target file exists
+                if os.path.isfile(f"{abs_des}/con_{SampleID}.fas"):
+                    self._p(f"{f.name} already processed, skipping")
                     continue
                 if ext in self.fasta_ext:
                     #Count seq_num 
@@ -666,7 +681,15 @@ class NanoAct():
                     pass
                 else:
                     continue
-                
+                if seq_num > max_reads:
+                    self._p(f"{f.name} has {seq_num} reads, more than the {max_reads} reads allowed, random sampling {max_reads} reads")
+                    #Random sampling
+                    with open(fas_path,'r') as handle:
+                        records = list(self._fasta_reader(handle))
+                        records = random_sample(records, max_reads)
+                    with open(fas_path,'w') as out:
+                        for rec in records:
+                            out.write(f">{rec['title']}\n{rec['seq']}\n")
                 #Align sequences
                 self._p(f"Working on {SampleID} ...")
                 self._mafft(fas_path, f"{abs_des}/aln_{SampleID}.fas")
