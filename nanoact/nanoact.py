@@ -416,11 +416,15 @@ class NanoAct():
         pool_df.to_csv(f"{des}/{name}", encoding ='utf-8-sig')
         return f"{des}/{name}"
 
-    def _mafft (self, src, des):
+    def _mafft (self, src, des, adjustdirection = False):
         mafft_bin = self._lib_path() + "/bin/mafft.bat"
         #Make mafft to auto adjust direction
         #./mafft.bat --genafpair --maxiterate 1000 2110_cluster_1_r442.fas > output.fas
-        cmd = f"{mafft_bin} --adjustdirection {src} > {des}"
+        if adjustdirection:
+            adjustdirection = "--adjustdirection"
+        else:
+            adjustdirection = ""
+        cmd = f"{mafft_bin} {adjustdirection} {src} > {des}"
         self._exec(cmd,suppress_output=True)
     def _gblock (self, fas):
         try:
@@ -641,7 +645,8 @@ class NanoAct():
                          #If there are too many reads, the alignment will be very slow
                          #Set max_reads to limit the number of reads to be aligned
                          #Random sampling will be performed if the number of reads exceeds max_reads
-                         max_reads=10000
+                         max_reads=10000,
+                         adjustdirection = False,
                          ):
         try:
             os.makedirs(des)
@@ -692,7 +697,7 @@ class NanoAct():
                             out.write(f">{rec['title']}\n{rec['seq']}\n")
                 #Align sequences
                 self._p(f"Working on {SampleID} ...")
-                self._mafft(fas_path, f"{abs_des}/aln_{SampleID}.fas")
+                self._mafft(fas_path, f"{abs_des}/aln_{SampleID}.fas", adjustdirection = adjustdirection)
                 self._naive_consensus(f"{abs_des}/aln_{SampleID}.fas", f"{abs_des}/con_{SampleID}.fas", SampleID)
         return abs_des
     def _naive_consensus (self, src, des, title):
