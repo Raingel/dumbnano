@@ -1806,19 +1806,25 @@ class NanoAct():
                 total += 1
             self._p(f"Total reads: {total}, sampled reads: {sampled}, ratio: {sampled/total}")
     def region_extract (self, src, des, input_format='fastq', output_format='both', 
+                        #Demo for ITS region of fungi
                         splicer={"start":("TCATTTAGAG","GCCCGTCGCT","GAAGTAAAAG","TCGTAACAAG"),
                                  "end":("GCTGAACTTA","GCATATCAA","ATCAATAAGCG","AAGCGGAGGA")
                                  },
+
                         k=1,
                             
                         ):
-        self._check_input_ouput(input_format, output_format)
+        io_format = self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.mkdir(des)
         except:
             pass
-        for f in os.scandir(src):
+        for f in os.scandir(src):     
             SampleID, ext = os.path.splitext(f.name)
+            ext = ext[1:]
+            if ext != io_format['input']:
+                self._p(f"{f.name} is not in the accepted input format, skipping")
+                continue
             if input_format == 'fasta' and ext in  self.fasta_ext:
                 seqs = self._fasta_reader(open(f.path,"r"))
             elif input_format == 'fastq' and ext in self.fastq_ext:
@@ -1827,10 +1833,11 @@ class NanoAct():
                 continue
             print("Processing file: ", f.name)
 
-            if output_format == 'fasta' or output_format == 'both':
-                fasta_handle = open(f"{des}/{SampleID}.fas", 'w')
-            if output_format == 'fastq' or output_format == 'both':
-                fastq_handle = open(f"{des}/{SampleID}.fastq", 'w')
+            if 'fastq' in io_format['output']:
+                output_fastq = open(f"{des}/{SampleID}.{io_format['output']['fastq']}", "w")
+            if 'fasta' in io_format['output']:
+                output_fasta = open(f"{des}/{SampleID}.{io_format['output']['fasta']}", "w")
+
             total_reads = 0
             total_extracted = 0
             for seq in seqs:
@@ -1850,11 +1857,12 @@ class NanoAct():
                 #if both start and end are found
                 if start != -1 and end != -1 and len(seq['seq'][start:end]) > 0:
                     #Save the extracted region
-                    if output_format == 'fasta' or output_format == 'both':
-                        fasta_handle.write(f">{seq['title']}\n{seq['seq'][start:end]}\n")
-                    if output_format == 'fastq' or output_format == 'both':
-                        fastq_handle.write(f"@{seq['title']}\n{seq['seq'][start:end]}\n+\n{seq['qual'][start:end]}\n")
+                    if 'fasta' in io_format['output']:
+                        output_fasta.write(f">{seq['title']}\n{seq['seq'][start:end]}\n")
+                    if 'fastq' in io_format['output']:
+                        output_fastq.write(f"@{seq['title']}\n{seq['seq'][start:end]}\n+\n{seq['qual'][start:end]}\n")
                     total_extracted += 1
+            self._p(f"{SampleID} Total reads: {total_reads}, extracted reads: {total_extracted}, ratio: {total_extracted/total_reads}")
 
     def _get_gbff_by_acc(self, 
         accession_no = ['LC729284','LC729293']
