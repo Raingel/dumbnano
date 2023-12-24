@@ -2184,8 +2184,7 @@ class NanoAct():
                         custom_acc = [],
                         custom_gbff = [],
                         ref_db = ['fungi.ITS','bacteria.16SrRNA'],
-                        evalue_thres=1e-80,
-                        simi_thres=0.8,
+                        sensitivity = 7.5,
                         suppress_mmseqs_output=True,
         ):
         """
@@ -2244,6 +2243,7 @@ class NanoAct():
                 os.makedirs(f"{self.TEMP}/ncbi-taxdump")
             except Exception as e:
                 pass
+            self._p("Downloading taxdump from NCBI...")
             with open(f"{self.TEMP}/ncbi-taxdump/taxdump.tar.gz", "wb") as f:
                 response = get(taxdump_URI)
                 f.write(response.content)
@@ -2277,7 +2277,7 @@ class NanoAct():
                 #Create query db
                 self._exec(f"{mmseqs} createdb {query} {self.TEMP}/{SampleID}_query_db", suppress_output=suppress_mmseqs_output)
                 #Run lca
-                self._exec(f"{mmseqs} taxonomy {self.TEMP}/{SampleID}_query_db {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {self.TEMP}/tmp --search-type 3 --lca-mode {lca_mode}", suppress_output=suppress_mmseqs_output)
+                self._exec(f"{mmseqs} taxonomy {self.TEMP}/{SampleID}_query_db {self.TEMP}/ref_db {des}/{SampleID}_taxonomyResult {self.TEMP}/tmp --search-type 3 --lca-mode {lca_mode} -s {sensitivity}", suppress_output=suppress_mmseqs_output)
                 #Parse lca result to tsv
                 self._exec(f"{mmseqs} createtsv {self.TEMP}/{SampleID}_query_db  {des}/{SampleID}_taxonomyResult {des}/{SampleID}_taxonomyResult.tsv", suppress_output=suppress_mmseqs_output)
                 #Parse tsv file to produce report
