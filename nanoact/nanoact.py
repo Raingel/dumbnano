@@ -1615,7 +1615,8 @@ class NanoAct():
                      input_format = "fastq",
                      output_format = "both",
                      vsearch="/nanoact/bin/vsearch", 
-                     id=0.9):
+                     id=0.9,
+                     suppress_output=True):
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         vsearch = f"{lib}/bin/vsearch"
@@ -1643,7 +1644,7 @@ class NanoAct():
                 fas_path = f"{self.TEMP}/from_fastq.fas"
                 self._fastq_to_fasta(f.path, fas_path)
             self._exec(f"{vsearch} --cluster_size {fas_path} --id {id} --strand plus --sizein --sizeout --fasta_width 0 --uc {self.TEMP}/all.clustered.uc --relabel OTU_ --centroids {self.TEMP}/all.otus.fasta --otutabout {self.TEMP}/all.otutab.txt --clusters {self.TEMP}/cluster ",
-                        suppress_output=True
+                        suppress_output=suppress_output
                         )
             #read cluster uc file
             try:
@@ -1688,7 +1689,7 @@ class NanoAct():
                    input_format = "fastq",
                    output_format = "both",                   
                    cd_hit_est="./nanoact/bin/cd-hit-est", 
-                   id=0.8, n=5):
+                   id=0.8, n=5,suppress_output=True):
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         cd_hit_est = f"{lib}/bin/cd-hit-est"
@@ -1722,7 +1723,7 @@ class NanoAct():
             #-c sequence identity threshold
             #-n Suggested word size: 8,9,10 for thresholds 0.90 ~ 1.0 7 for thresholds 0.88 ~ 0.9 6 for thresholds 0.85 ~ 0.88 5 for thresholds 0.80 ~ 0.85 4 for thresholds 0.75 ~ 0.8
             #-d length of description in .clstr file, default 20
-            self._exec(f"{cd_hit_est} -i {fas_path} -o {self.TEMP}/cdhit.fas -c {id} -n {n} -d 0")
+            self._exec(f"{cd_hit_est} -i {fas_path} -o {self.TEMP}/cdhit.fas -c {id} -n {n} -d 0",suppress_output=suppress_output)
             #Try read clstr file
             try:
                 with open(f"{self.TEMP}/cdhit.fas.clstr", 'r') as handle:
