@@ -1520,7 +1520,8 @@ class NanoAct():
                        min_read_ratio = 0,
                        kmer_per_seq = 20,
                        suppress_output=True,
-                       tmp = ""):
+                       tmp = "",
+                       dbtype = "2"):
         #If tmp for mmseqs is on NFS or other cloud storage, it will cause some unknown issues in mmseqs. So let user specify a local tmp folder if needed.
         if tmp == "":
             tmp = f"{self.TEMP}/tmp"
@@ -1556,7 +1557,7 @@ class NanoAct():
 
             #build db
             #print("Creating db")
-            self._exec(f"{mmseqs} createdb {fas_path} {self.TEMP}/db", suppress_output=suppress_output)
+            self._exec(f"{mmseqs} createdb {fas_path} {self.TEMP}/db --dbtype {dbtype}", suppress_output=suppress_output)
             #cluster
             #print("Clustering")
             if  cluster_mode == 'linclust':
