@@ -1686,6 +1686,8 @@ class NanoAct():
                             handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
             #Copy otu table to destination
             shutil.copy(f"{self.TEMP}/all.otutab.txt", f"{abs_des}/{SampleID}_otu_table.txt")
+            shutil.copy(f"{self.TEMP}/all.otus.fasta", f"{abs_des}/{SampleID}.centroid")
+            shutil.copy(f"{self.TEMP}/all.clustered.uc", f"{abs_des}/{SampleID}.uc")
     def cd_hit_est(self, src, des, 
                    input_format = "fastq",
                    output_format = "both",                   
