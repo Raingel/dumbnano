@@ -1621,7 +1621,7 @@ class NanoAct():
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
         vsearch = f"{lib}/bin/vsearch"
-        self._check_input_ouput(input_format=input_format, output_format=output_format)
+        io_format = self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des)
         except:
@@ -1629,12 +1629,12 @@ class NanoAct():
         abs_des = os.path.abspath(des)
         for f in os.scandir(src):
             SampleID, ext = os.path.splitext(os.path.basename(f.name))
-            if f.is_file() and ext in self.fasta_ext and input_format == "fasta":
-                pass
-            elif f.is_file() and ext in self.fastq_ext and input_format == "fastq":
+            ext = ext[1:]
+            if f.is_file() and ext == io_format['input']:
                 pass
             else:
-                continue 
+                self._p(f"{f.name} is not in the accepted input format, skipping")
+                continue
             print("Clustering", f.name)   
             #clean up temp folder
             self._clean_temp()
@@ -1676,11 +1676,11 @@ class NanoAct():
                         seqs.remove(seq)
                         break
             for cluster_no in bin:
-                if output_format in ['both','fasta']:
+                if 'fasta' in io_format['output']:
                     with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fas", 'w') as handle:
                         for seq in bin[cluster_no]:
                             handle.write(f">{seq['title']}\n{seq['seq']}\n")
-                if output_format in ['both','fastq']:
+                if 'fastq' in io_format['output']:
                     with open(f"{abs_des}/{SampleID}_cluster_{cluster_no}_r{len(bin[cluster_no])}.fastq", 'w') as handle:
                         for seq in bin[cluster_no]:
                             handle.write(f"@{seq['title']}\n{seq['seq']}\n+\n{seq['qual']}\n")
