@@ -195,7 +195,7 @@ class NanoAct():
     def NCBIblast(self, seqs = ">a\nTTGTCTCCAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTATACCGCGGGGGCACGAATGGCTCATTATATAAGTTATCGTTTATTTGATAGCACATTACTACATGGATAACTGTGG\n>b\nTAATACATGCTAAAAATCCCGACTTCGGAAGGGATGTATTTATTGGGTCGCTTAACGCCCTTCAGGCTTCCTGGTGATT\n"
                   ,timeout = 30):
         program = "blastn&MEGABLAST=on"
-        database = "nt"
+        database = "core_nt"
         encoded_queries = urllib.parse.quote(seqs)
         WORD_SIZE = 32
         EXPECT = 0.001
@@ -686,7 +686,7 @@ class NanoAct():
                     pass
                 else:
                     continue
-                if seq_num > max_reads:
+                if seq_num > max_reads and max_reads > 0:
                     self._p(f"{f.name} has {seq_num} reads, more than the {max_reads} reads allowed, random sampling {max_reads} reads")
                     #Random sampling
                     with open(fas_path,'r') as handle:
@@ -731,19 +731,20 @@ class NanoAct():
             FwIndex_check = edlib.align(FwIndex,seqF, mode="HW", k=int(len(FwIndex) * mismatch_ratio_f), task="locations")
             RvAnchor_check = edlib.align(RvAnchor,seqR, mode="HW", k=int(len(RvAnchor) * mismatch_ratio_r), task="locations")
             # Align the forward and reverse index sequences with the beginning and end of the input sequence read, allowing for a certain number of mismatches defined by the mismatch ratio
+            # print(id, FwIndex_check, FwIndex, seqF[:search_range], RvAnchor_check, RvAnchor, seqR[-search_range:])
             if FwIndex_check["editDistance"] != -1:
                 #mark found region to lower case
-                seqF = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]+1].lower() + seqF[FwIndex_check["locations"][0][1]+1:]
+                seqF_marked = seqF[:FwIndex_check["locations"][0][0]] + seqF[FwIndex_check["locations"][0][0]:FwIndex_check["locations"][0][1]+1].lower() + seqF[FwIndex_check["locations"][0][1]+1:]
+                seqR_marked = seqR
                 if RvAnchor_check["editDistance"] != -1:
                     if RvAnchor != "":
                         #If RvAnchor is set, mark found region to lower case
-                        seqR = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]+1].lower() + seqR[RvAnchor_check["locations"][0][1]+1:]
-                    ids.append(id)
+                        seqR_marked = seqR[:RvAnchor_check["locations"][0][0]] + seqR[RvAnchor_check["locations"][0][0]:RvAnchor_check["locations"][0][1]+1].lower() + seqR[RvAnchor_check["locations"][0][1]+1:]
                     integrity.append(True)
                 else:
-                    ids.append(id)
                     integrity.append(False)
-                seqs.append(seqF +seq[search_range:-search_range] + seqR)
+                ids.append(id)
+                seqs.append(seqF_marked +seq[search_range:-search_range] + seqR_marked)
         # If a barcode is identified, return the corresponding sample ID and a boolean indicating whether the barcode was matched with sufficient integrity
         return ids, integrity, seqs
     def singlebar(self, src, des, 
@@ -869,6 +870,167 @@ class NanoAct():
         FAILED_NUM = len(pool['UNKNOWN']) + len(pool['MULTIPLE']) + len(pool['TRUNCATED']) + len(pool['IncorrectLength'])
         self._p(f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
         return des
+
+    def double_demultiplex(self, src, des, 
+                        BARCODE_INDEX_FILE,
+                        primers = ['FwPrimer', 'RvPrimer'],
+                        mismatch_ratio_f = 0.15, mismatch_ratio_r = 0.15, 
+                        expected_length_variation = 0.3, 
+                        search_range = 150,
+                        rvc_rvanchor = False,
+                        input_format = "fastq",
+                        output_format = "both",
+                        ):
+        """
+        Input: 單個fastq檔案，例如 all.fastq
+        Output: 一個資料夾，程式會在該資料夾中輸出以SampleID為檔名的fastq檔案或fasta檔案（由output_format決定），例如 SampleID.fastq
+        BARCODE_INDEX_FILE: barcode資料庫，可以是csv或tsv檔案，必須包含 SampleID、FwIndex、FwPrimer、RvAnchor、RvPrimer、ExpectedLength 六個欄位。
+        primers: 使用的引子（primer），預設為 ['FwPrimer', 'RvPrimer']。
+        mismatch_ratio_f: FwIndex 容許的錯誤率，預設為 0.15。例如 barcode 長度為 20bp，則容許 0.15*20=3bp 的錯誤（edit distance）。
+        mismatch_ratio_r: RvPrimer 容許的錯誤率，預設為 0.15。
+        expected_length_variation: 預期的 read 長度變異，預設為 0.3。例如預期長度為 300bp，則容許 0.3*300=90bp 的變異。
+        search_range: 搜索 barcode 的範圍，預設為 150bp。代表搜尋範圍為 read 的前 150bp 和後 150bp。
+        output_format: 輸出檔案的格式，預設為 'both'。可以是 fastq 或 fasta。'both' 代表同時輸出 fastq 和 fasta。
+
+        工作流程：
+        1. 使用 `fastq_reader` 函數處理原始定序檔案，每次讀取四行代表一個定序 read。
+        2. 進行兩次解多工（demultiplexing）：
+        1. 第一次基於 FwIndex 將 reads 分群。
+        2. 第二次基於引子（primers）進行進一步的分群。
+        3. 如果識別到唯一的 Sample ID，則將 read 分配到對應 Sample 的輸出檔案中。
+        4. 如果條碼被截斷，則將 read 附加到 "TRUNCATED" 字典中。
+        5. 如果識別出多個條碼，則將 read 附加到 "MULTIPLE" 字典中。
+        6. 如果未識別條碼，則將 read 附加到 "UNKNOWN" 字典中。
+        7. 最終根據條碼將已解多工的 reads 輸出到不同檔案。
+        """
+
+        # 輸入輸出格式檢查
+        io_format = self._check_input_ouput(input_format=input_format, output_format=output_format)
+        
+        # 載入BARCODE_INDEX_FILE檔案
+        if BARCODE_INDEX_FILE.endswith("tsv"):
+            sep = "\t"
+        elif BARCODE_INDEX_FILE.endswith("csv"):
+            sep = ","
+        else:
+            raise ValueError("BARCODE_INDEX_FILE 必須是 tsv 或 csv 檔案")
+
+        BARCODE_IDX_DF = pd.read_csv(BARCODE_INDEX_FILE, sep=sep)
+        
+        # 檢查必要欄位
+        required_columns = ["SampleID", "FwIndex", "FwPrimer", "RvAnchor", "RvPrimer", "ExpectedLength"]
+        # Including user specified primers
+        required_columns.extend(primers)
+        if not all([col in BARCODE_IDX_DF.columns for col in required_columns]):
+            raise ValueError(f"BARCODE_INDEX_FILE 必須包含這些欄位: {', '.join(required_columns)}")
+        
+        # 生成barcode的hash table
+        barcode_hash_tables = {}
+        col_used_as_barcode = ["FwIndex"] + primers
+        for c in col_used_as_barcode:
+            barcode_hash_tables[c] = {}
+            for index, row in BARCODE_IDX_DF.iterrows():
+                barcode_hash_tables[c][row["SampleID"]] = { 
+                    "RvAnchor": row["RvAnchor"],
+                    "ExpectedLength": row["ExpectedLength"],
+                    }
+                barcode_hash_tables[c][row["SampleID"]]["FwIndex"] = row[c]
+
+        
+        # 建立pool來儲存解多工後的reads
+        pool = {id: [] for id in barcode_hash_tables["FwIndex"]}
+        pool["UNKNOWN"] = []
+        pool["MULTIPLE"] = []
+        pool["TRUNCATED"] = []
+        pool["IncorrectLength"] = []
+        # 處理定序檔案
+        _, ext = os.path.splitext(src)
+        ext = ext[1:]
+        with open(src, "r") as handle:
+            if ext in self.fastq_ext and input_format in self.fastq_ext:
+                reader = self._fastq_reader(handle)
+            elif ext in self.fasta_ext and input_format in self.fasta_ext:
+                reader = self._fasta_reader(handle)
+            else:
+                raise ValueError(f"Input file extension {ext} 不符合輸入格式 {input_format}")
+            counter = 0
+            for record in reader:
+                counter += 1
+                #Show current progress
+                if counter % 1000 == 0:
+                    self._p(f"Parsed {counter}", end="\r")
+                # First pass: demultiplex based on FwIndex
+                barcode_hash_table = barcode_hash_tables["FwIndex"]
+                ids_from_FwIndex, integrity, seqs = self._get_sample_id_single(record["seq"], barcode_hash_table, search_range, mismatch_ratio_f, mismatch_ratio_r)
+                #if no barcode is identified, append the read to the "UNKNOWN" dictionary
+                if len(ids_from_FwIndex) == 0:
+                    pool["UNKNOWN"].append(record)
+                    continue
+
+                # Second pass: demultiplex based on primers
+                ids_from_primers = []
+                for p in primers:
+                    #print(f"Comparing {p}")
+                    barcode_hash_table = barcode_hash_tables[p]
+                    ids, _, _ = self._get_sample_id_single(record["seq"], barcode_hash_table, search_range, mismatch_ratio_f, mismatch_ratio_r)
+                    ids_from_primers.extend(ids)
+                # Get the intersection of ids_from_FwIndex and ids_from_primers
+                ids = list(set(ids_from_FwIndex) & set(ids_from_primers))
+                #print(f"Final IDs: {ids}")
+                if len(ids) == 1:
+                    #if only one barcode is identified, append the read to the corresponding sample's output file
+                    record["seq"] = seqs[0]
+                    if integrity[0] == False:
+                        pool["TRUNCATED"].append(record)
+                    else:
+                        #Check if seq in ExpectedLength
+                        if (len(seqs[0]) - barcode_hash_tables["FwIndex"][ids[0]]["ExpectedLength"])**2 < (barcode_hash_tables["FwIndex"][ids[0]]["ExpectedLength"] * expected_length_variation)**2:
+                            pool[ids[0]].append(record)
+                        else:
+                            pool["IncorrectLength"].append(record)
+                elif len(ids) > 1:
+                    pool["MULTIPLE"].append(record)
+                else:
+                    pool["UNKNOWN"].append(record)
+
+
+        #Save to separate fastq file
+        try:
+            os.makedirs(f"{des}/", exist_ok=True)
+            os.makedirs(f"{des}/trash/", exist_ok=True)
+        except:
+            pass
+        stat_df = pd.DataFrame(columns=["SampleID", "Count"])
+        for bin in pool:
+            stat_df = pd.concat([stat_df, pd.DataFrame({"SampleID": [bin], "Count": [len(pool[bin])]})])
+            if bin in ['MULTIPLE', 'UNKNOWN', 'TRUNCATED','IncorrectLength']:
+                path = f"{des}/trash/{bin}"
+            else:
+                path = f"{des}/{bin}"
+            #Save to separate fastq or fasta file based on output_format
+            #Initialize output file
+            if 'fastq' in io_format['output']:
+                output_fastq = open(f"{path}.{io_format['output']['fastq']}", "w")
+                for record in pool[bin]:
+                    output_fastq.write("@"+record["title"] + "\n")
+                    output_fastq.write(record["seq"] + "\n")
+                    output_fastq.write("+" + "\n")
+                    output_fastq.write(record["qual"] + "\n")
+            if 'fasta' in io_format['output']:
+                output_fasta = open(f"{path}.{io_format['output']['fasta']}", "w")
+                for record in pool[bin]:
+                    output_fasta.write(">"+ record["title"] + "\n")
+                    output_fasta.write(record["seq"] + "\n")
+            
+        stat_df.to_csv(f"{des}/2_Doublebar_stat.csv", index=False)
+        #Print out the number of reads discarded due to unknown, multiple, or truncated barcodes
+        FAILED_NUM = len(pool['UNKNOWN']) + len(pool['MULTIPLE']) + len(pool['TRUNCATED']) + len(pool['IncorrectLength'])
+        self._p(f"{counter-FAILED_NUM}/{counter} ({(counter-FAILED_NUM)/counter*100:.2f}%) reads were demultiplexed successfully")
+        return des
+    
+
+                    
+
     def _get_sample_id_dual (self, seq, barcode_hash_table, mismatch_ratio_f = 0.15, mismatch_ratio_r = 0.15):
         ids = []
         seqs = []
@@ -1510,7 +1672,7 @@ class NanoAct():
         return f"{des}/{name}"
     def mmseqs_cluster(self, 
                        src, des, 
-                       mmseqs="/nanoact/bin/mmseqs", 
+                       mmseqs="mmseqs",  #Use mmseqs or mmseqs_sse41. if are in VirtualBox or very old CPU which does not support AVX2, use mmseqs_sse41
                        input_format = "fastq",
                        output_format = "both",
                        min_seq_id=0.5, cov_mode=0, k=14, 
@@ -1530,7 +1692,10 @@ class NanoAct():
             raise ValueError("cluster_mode must be one of 0,1,2,'linclust'")
         #Get current library file  path
         lib = os.path.dirname(os.path.realpath(__file__))
-        mmseqs = f"{lib}/bin/mmseqs"
+        #bin should be mmseqs or mmseqs_sse41, depending on the CPU
+        if mmseqs not in ["mmseqs", "mmseqs_sse41"]:
+            raise ValueError("mmseqs must be one of 'mmseqs', 'mmseqs_sse41'")
+        mmseqs = f"{lib}/bin/{mmseqs}"
         io_format = self._check_input_ouput(input_format=input_format, output_format=output_format)
         try:
             os.makedirs(des)
