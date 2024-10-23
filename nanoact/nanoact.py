@@ -658,6 +658,7 @@ class NanoAct():
             ext = ext[1:]
             input_ext = self._check_input_ouput(input_format, "fasta")
             if f.is_file():
+                self._p(f"Working on {SampleID} ...")
                 if ext != input_ext['input']:
                     self._p(f"{f.name} is not in the accepted input format, skipping")
                     continue
@@ -696,7 +697,6 @@ class NanoAct():
                         for rec in records:
                             out.write(f">{rec['title']}\n{rec['seq']}\n")
                 #Align sequences
-                self._p(f"Working on {SampleID} ...")
                 self._mafft(fas_path, f"{abs_des}/aln_{SampleID}.fas", adjustdirection = adjustdirection)
                 self._naive_consensus(f"{abs_des}/aln_{SampleID}.fas", f"{abs_des}/con_{SampleID}.fas", SampleID)
         return abs_des
@@ -930,6 +930,8 @@ class NanoAct():
         for c in col_used_as_barcode:
             barcode_hash_tables[c] = {}
             for index, row in BARCODE_IDX_DF.iterrows():
+                if rvc_rvanchor:
+                    row["RvAnchor"] = self._reverse_complement(row["RvAnchor"])
                 barcode_hash_tables[c][row["SampleID"]] = { 
                     "RvAnchor": row["RvAnchor"],
                     "ExpectedLength": row["ExpectedLength"],
